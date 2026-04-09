@@ -584,7 +584,9 @@ private:
         double max_per_second = 0;
         std::chrono::steady_clock::time_point last_request;
         int pending_count = 0;
-        static constexpr int MAX_PENDING = 20; // bounded queue per spec
+        // Bounded queue per spec. In single-threaded mode, pending_count is always
+        // 0 or 1. This becomes meaningful when async I/O is added in sub-project 4.
+        static constexpr int MAX_PENDING = 20;
     };
     std::unordered_map<std::string, RateState> rate_limits_;
 };
@@ -1250,7 +1252,7 @@ git commit -m "feat: add main stdio loop with signal handling and shutdown"
 - Create: `src/sources/tibiadata.cpp`
 - Create: `tests/test_tibiadata.cpp`
 - Create: `tests/fixtures/tibiadata/character_bubble.json`
-- Create: `tests/fixtures/tibiadata/guild_example.json`
+- Create: `tests/fixtures/tibiadata/guild_red_rose.json`
 - Create: `tests/fixtures/tibiadata/world_antica.json`
 - Create: `tests/fixtures/tibiadata/worlds.json`
 
@@ -1518,7 +1520,12 @@ curl -s "https://tibia.fandom.com/wiki/The_Annihilator_Quest" > tests/fixtures/t
 #include <fstream>
 #include <sstream>
 
-static std::string read_fixture(const std::string& path) {
+#ifndef FIXTURE_DIR
+#define FIXTURE_DIR "../tests/fixtures"
+#endif
+
+static std::string read_fixture(const std::string& name) {
+    std::string path = std::string(FIXTURE_DIR) + "/" + name;
     std::ifstream f(path);
     std::stringstream ss;
     ss << f.rdbuf();
@@ -1719,7 +1726,12 @@ curl -s "https://www.tibia.com/charactertrade/?subtopic=currentcharactertrades&p
 #include <fstream>
 #include <sstream>
 
-static std::string read_fixture(const std::string& path) {
+#ifndef FIXTURE_DIR
+#define FIXTURE_DIR "../tests/fixtures"
+#endif
+
+static std::string read_fixture(const std::string& name) {
+    std::string path = std::string(FIXTURE_DIR) + "/" + name;
     std::ifstream f(path);
     std::stringstream ss;
     ss << f.rdbuf();
