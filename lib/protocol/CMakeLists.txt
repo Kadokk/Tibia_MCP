@@ -29,5 +29,24 @@ target_link_libraries(tibia-protocol
     PRIVATE nlohmann_json::nlohmann_json
 )
 
-# Tests — placeholder, uncommented in Task 2
-# enable_testing()
+enable_testing()
+FetchContent_Declare(googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+)
+if(NOT TARGET GTest::gtest_main)
+    FetchContent_MakeAvailable(googletest)
+endif()
+
+add_executable(tibia-protocol-tests
+    tests/test_xtea.cpp
+)
+target_include_directories(tibia-protocol-tests PRIVATE src)
+target_link_libraries(tibia-protocol-tests PRIVATE
+    tibia-protocol
+    GTest::gtest_main
+)
+target_compile_definitions(tibia-protocol-tests PRIVATE
+    FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+)
+add_test(NAME tibia-protocol-tests COMMAND tibia-protocol-tests)
