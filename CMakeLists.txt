@@ -36,6 +36,11 @@ add_executable(tibia-mcp
     src/mcp/tools/lookup_guild.cpp
     src/mcp/tools/list_online_players.cpp
     src/mcp/tools/list_worlds.cpp
+    src/mcp/tools/search_item.cpp
+    src/mcp/tools/search_creature.cpp
+    src/mcp/tools/search_spell.cpp
+    src/mcp/tools/search_quest.cpp
+    src/mcp/tools/search_wiki.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)

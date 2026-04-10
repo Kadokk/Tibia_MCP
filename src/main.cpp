@@ -7,6 +7,11 @@
 #include "mcp/tools/lookup_guild.h"
 #include "mcp/tools/list_online_players.h"
 #include "mcp/tools/list_worlds.h"
+#include "mcp/tools/search_item.h"
+#include "mcp/tools/search_creature.h"
+#include "mcp/tools/search_spell.h"
+#include "mcp/tools/search_quest.h"
+#include "mcp/tools/search_wiki.h"
 #include <csignal>
 #include <iostream>
 
@@ -36,6 +41,11 @@ int main() {
     server.register_tool(std::make_unique<LookupGuildTool>(http_client, cache));
     server.register_tool(std::make_unique<ListOnlinePlayersTool>(http_client, cache));
     server.register_tool(std::make_unique<ListWorldsTool>(http_client, cache));
+    server.register_tool(std::make_unique<SearchItemTool>(http_client, cache));
+    server.register_tool(std::make_unique<SearchCreatureTool>(http_client, cache));
+    server.register_tool(std::make_unique<SearchSpellTool>(http_client, cache));
+    server.register_tool(std::make_unique<SearchQuestTool>(http_client, cache));
+    server.register_tool(std::make_unique<SearchWikiTool>(http_client, cache));
 
     while (true) {
         auto msg = JsonRpc::read_message(std::cin);
