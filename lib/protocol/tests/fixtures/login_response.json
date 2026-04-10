@@ -1,0 +1,32 @@
+{
+    "session": {
+        "sessionkey": "test-session-key-12345",
+        "lastlogintime": 1712600000,
+        "ispremium": false,
+        "premiumuntil": 0,
+        "status": "active"
+    },
+    "playdata": {
+        "worlds": [
+            {
+                "id": 1,
+                "name": "Antica",
+                "externaladdress": "tibia1.cipsoft.com",
+                "externalport": 7172,
+                "pvptype": 0,
+                "externaladdressprotected": "tibia1.cipsoft.com",
+                "externalportprotected": 7172
+            }
+        ],
+        "characters": [
+            {
+                "worldid": 1,
+                "name": "Test Character",
+                "ismain": true,
+                "ishidden": false,
+                "level": 100,
+                "vocation": "Elite Knight"
+            }
+        ]
+    }
+}
