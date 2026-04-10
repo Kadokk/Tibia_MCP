@@ -31,6 +31,7 @@ add_executable(tibia-mcp
     src/mcp/transport.cpp
     src/mcp/server.cpp
     src/sources/tibiadata.cpp
+    src/sources/tibiawiki.cpp
     src/mcp/tools/lookup_character.cpp
     src/mcp/tools/lookup_guild.cpp
     src/mcp/tools/list_online_players.cpp
@@ -51,11 +52,13 @@ add_executable(tibia-mcp-tests
     tests/test_transport.cpp
     tests/test_server.cpp
     tests/test_tibiadata.cpp
+    tests/test_tibiawiki.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
     src/mcp/server.cpp
     src/sources/tibiadata.cpp
+    src/sources/tibiawiki.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src)
 target_link_libraries(tibia-mcp-tests PRIVATE
