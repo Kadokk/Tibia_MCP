@@ -31,6 +31,10 @@ add_executable(tibia-mcp
     src/mcp/transport.cpp
     src/mcp/server.cpp
     src/sources/tibiadata.cpp
+    src/mcp/tools/lookup_character.cpp
+    src/mcp/tools/lookup_guild.cpp
+    src/mcp/tools/list_online_players.cpp
+    src/mcp/tools/list_worlds.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)

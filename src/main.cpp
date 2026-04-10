@@ -2,6 +2,11 @@
 #include "mcp/transport.h"
 #include "mcp/server.h"
 #include "cache/cache.h"
+#include "http/client.h"
+#include "mcp/tools/lookup_character.h"
+#include "mcp/tools/lookup_guild.h"
+#include "mcp/tools/list_online_players.h"
+#include "mcp/tools/list_worlds.h"
 #include <csignal>
 #include <iostream>
 
@@ -24,7 +29,13 @@ int main() {
     g_cache = &cache;
 
     McpServer server("tibia-mcp", "0.1.0");
-    // Tools will be registered in subsequent tasks
+
+    HttpClient http_client;
+
+    server.register_tool(std::make_unique<LookupCharacterTool>(http_client, cache));
+    server.register_tool(std::make_unique<LookupGuildTool>(http_client, cache));
+    server.register_tool(std::make_unique<ListOnlinePlayersTool>(http_client, cache));
+    server.register_tool(std::make_unique<ListWorldsTool>(http_client, cache));
 
     while (true) {
         auto msg = JsonRpc::read_message(std::cin);
