@@ -26,6 +26,7 @@ find_package(SQLite3 REQUIRED)
 
 add_executable(tibia-mcp
     src/main.cpp
+    src/cache/cache.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
@@ -35,18 +36,18 @@ target_link_libraries(tibia-mcp PRIVATE
     SQLite3::SQLite3
 )
 
-# Test target — will be properly set up in Task 3
-# enable_testing()
-# add_executable(tibia-mcp-tests
-#     tests/test_cache.cpp
-# )
-# target_include_directories(tibia-mcp-tests PRIVATE src)
-# target_link_libraries(tibia-mcp-tests PRIVATE
-#     GTest::gtest_main
-#     nlohmann_json::nlohmann_json
-#     SQLite3::SQLite3
-# )
-# target_compile_definitions(tibia-mcp-tests PRIVATE
-#     FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
-# )
-# add_test(NAME tibia-mcp-tests COMMAND tibia-mcp-tests)
+enable_testing()
+add_executable(tibia-mcp-tests
+    tests/test_cache.cpp
+    src/cache/cache.cpp
+)
+target_include_directories(tibia-mcp-tests PRIVATE src)
+target_link_libraries(tibia-mcp-tests PRIVATE
+    GTest::gtest_main
+    nlohmann_json::nlohmann_json
+    SQLite3::SQLite3
+)
+target_compile_definitions(tibia-mcp-tests PRIVATE
+    FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
+)
+add_test(NAME tibia-mcp-tests COMMAND tibia-mcp-tests)
