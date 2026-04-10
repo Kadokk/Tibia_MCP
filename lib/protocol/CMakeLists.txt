@@ -19,6 +19,7 @@ endif()
 # Library — start with just xtea.cpp placeholder
 add_library(tibia-protocol STATIC
     src/crypto/xtea.cpp
+    src/crypto/rsa.cpp
 )
 
 target_include_directories(tibia-protocol PUBLIC include)
@@ -40,6 +41,7 @@ endif()
 
 add_executable(tibia-protocol-tests
     tests/test_xtea.cpp
+    tests/test_rsa.cpp
 )
 target_include_directories(tibia-protocol-tests PRIVATE src)
 target_link_libraries(tibia-protocol-tests PRIVATE
