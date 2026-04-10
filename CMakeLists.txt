@@ -42,6 +42,9 @@ add_executable(tibia-mcp
     src/mcp/tools/search_spell.cpp
     src/mcp/tools/search_quest.cpp
     src/mcp/tools/search_wiki.cpp
+    src/mcp/tools/search_bazaar.cpp
+    src/mcp/tools/lookup_bazaar_auction.cpp
+    src/mcp/tools/clear_cache.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
