@@ -47,6 +47,27 @@ lib/protocol/
 - Single-threaded blocking I/O (async deferred to sub-project 4)
 - BattlEye isolated as a separate module with a minimal interface
 - Public API exposes only what consumers need (TibiaClient + types)
+- **Platform:** POSIX-only (macOS/Linux). TCP sockets use POSIX APIs. Windows is not supported.
+
+**Connection lifecycle states:**
+
+```
+Disconnected → [login()] → Authenticated → [select_character()] → Connected
+     ↑                          ↑                                      │
+     └──────────────────────────┴────── [disconnect()] ────────────────┘
+```
+
+- `Disconnected`: Initial state. Only `login()` is valid.
+- `Authenticated`: Web login succeeded. `select_character()` and `disconnect()` are valid.
+- `Connected`: Game server connection established. `disconnect()` is valid.
+- Calling methods in wrong state returns an error result (not UB/crash).
+
+**Timeout and error handling:**
+- TCP connect timeout: 10 seconds (configurable via `set_connect_timeout()`)
+- TCP read timeout: 30 seconds (configurable via `set_read_timeout()`)
+- HTTP login timeout: 15 seconds (inherited from libcurl)
+- Partial TCP reads: `Connection` reads the 2-byte length prefix first, then reads exactly N remaining bytes. Timeout during partial read = error.
+- `ConnectResult.error` carries specific failure reasons: "connection_refused", "timeout", "invalid_session", "battleye_rejected", "server_full", "unknown_error"
 
 ## Login Flow
 
@@ -83,14 +104,23 @@ Server → JSON response:
 
 2. Client sends first packet (unencrypted outer frame):
    ├── 2 bytes: packet length
+   ├── 4 bytes: Adler32 checksum of remaining data
    ├── 2 bytes: client OS (Linux=1, Windows=2, Mac=3)
    ├── 2 bytes: protocol version
+   ├── 4 bytes: client version (e.g., 1321 for 13.21)
+   ├── 4 bytes: content-revision / DAT signature
+   ├── 4 bytes: SPR signature
+   ├── 4 bytes: PIC signature
+   ├── 1 byte: preview state (0 = normal)
    └── RSA-encrypted block (128 bytes):
        ├── 1 byte: 0x00 (padding check)
        ├── 16 bytes: XTEA key (4 x uint32, randomly generated)
        ├── 1 byte: is_gamemaster flag
        ├── string: session token
        └── string: character name
+   Note: The exact fields and their order must be verified against packet
+   captures from the current client version. The signatures (DAT/SPR/PIC)
+   can be extracted from the official client's data files.
 
 3. Server responds (XTEA-encrypted from here on):
    ├── Login success/failure
@@ -107,7 +137,7 @@ Server → JSON response:
 - **Purpose:** Encrypt the initial login packet to the game server
 - **Algorithm:** 1024-bit RSA, raw (no PKCS padding)
 - **Public key:** Hardcoded, known from the official client (extracted by community)
-- **Implementation:** OpenSSL `RSA_public_encrypt` with `RSA_NO_PADDING`
+- **Implementation:** OpenSSL EVP API (`EVP_PKEY_encrypt`) — the legacy `RSA_public_encrypt` was deprecated in OpenSSL 3.0. Use `EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_NO_PADDING)` to specify raw RSA.
 - **Block size:** 128 bytes input → 128 bytes output
 
 ```
@@ -137,23 +167,25 @@ void xtea_decrypt(uint8_t* data, size_t len, const uint32_t key[4]);
 All Tibia packets follow this wire format:
 
 ```
-┌──────────────────────────────────────────────┐
-│ Outer frame                                  │
-├──────────┬───────────────────────────────────┤
-│ 2 bytes  │ Payload                           │
-│ length   │ (XTEA encrypted after handshake)  │
-│ (LE u16) │                                   │
-├──────────┴───────────────────────────────────┤
-│ After decryption:                            │
-├──────────┬───────────────────────────────────┤
-│ 2 bytes  │ Inner data                        │
-│ inner    │                                   │
-│ length   │                                   │
-├──────────┼──────────┬────────────────────────┤
-│          │ 1 byte   │ Opcode-specific        │
-│          │ opcode   │ payload (varies)        │
-└──────────┴──────────┴────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│ Outer frame                                           │
+├──────────┬──────────┬────────────────────────────────┤
+│ 2 bytes  │ 4 bytes  │ Payload                        │
+│ length   │ Adler32  │ (XTEA encrypted after          │
+│ (LE u16) │ checksum │  handshake)                    │
+├──────────┴──────────┴────────────────────────────────┤
+│ After decryption:                                     │
+├──────────┬───────────────────────────────────────────┤
+│ 2 bytes  │ Inner data                                │
+│ inner    │                                           │
+│ length   │                                           │
+├──────────┼──────────┬────────────────────────────────┤
+│          │ 1 byte   │ Opcode-specific                │
+│          │ opcode   │ payload (varies)               │
+└──────────┴──────────┴────────────────────────────────┘
 ```
+
+Note: The Adler32 checksum covers the encrypted payload (everything after the checksum itself). Some newer protocol versions may omit the checksum — this must be verified against the current version via packet captures.
 
 - All integers are little-endian
 - Strings are length-prefixed: uint16 length + raw bytes (no null terminator)
@@ -221,8 +253,8 @@ BattlEye is CipSoft's integrated anti-cheat system. It operates at the protocol 
 ```cpp
 class BattleEye {
 public:
-    // Process an incoming BattlEye packet, return response if needed
-    std::optional<std::vector<uint8_t>> handle(const std::vector<uint8_t>& data);
+    // Process an incoming BattlEye packet, return zero or more response packets
+    std::vector<std::vector<uint8_t>> handle(const std::vector<uint8_t>& data);
 
     // Check if BattlEye session is established
     bool is_active() const;
@@ -247,7 +279,10 @@ private:
 struct Character {
     std::string name;
     int world_id;
-    // Additional fields from the login API
+    int level;
+    std::string vocation;
+    bool is_main;
+    bool is_hidden;
 };
 
 struct World {
@@ -263,6 +298,8 @@ struct LoginResult {
     bool success;
     std::string error;
     std::string session_token;
+    int64_t last_login_time;       // Unix timestamp of last login
+    bool is_premium;
     std::vector<Character> characters;
     std::vector<World> worlds;
 };
@@ -294,7 +331,10 @@ public:
 
     // Configuration
     void set_rsa_key(const std::string& modulus, const std::string& exponent);
-    void set_client_version(uint16_t version);
+    void set_client_version(uint32_t version);
+    void set_protocol_version(uint16_t version);
+    void set_connect_timeout(int seconds);
+    void set_read_timeout(int seconds);
     void set_battleye_log_path(const std::string& path);
 };
 ```
@@ -307,9 +347,23 @@ cmake_minimum_required(VERSION 3.20)
 project(tibia-protocol LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Dependencies
 find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
+
+# nlohmann/json for HTTP login JSON parsing
+include(FetchContent)
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+# Only fetch if not already available (e.g., from parent project)
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    FetchContent_MakeAvailable(json)
+endif()
 
 add_library(tibia-protocol STATIC
     src/crypto/rsa.cpp
@@ -325,13 +379,23 @@ add_library(tibia-protocol STATIC
 target_include_directories(tibia-protocol PUBLIC include)
 target_include_directories(tibia-protocol PRIVATE src)
 target_link_libraries(tibia-protocol
-    PUBLIC OpenSSL::Crypto
-    PUBLIC CURL::libcurl
+    PRIVATE OpenSSL::Crypto    # Internal use only, not exposed in public headers
+    PRIVATE CURL::libcurl      # Internal use only
+    PRIVATE nlohmann_json::nlohmann_json  # Internal use only
 )
 
 # Tests
 enable_testing()
-find_package(GTest REQUIRED)
+
+# GTest: use FetchContent if not already available
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+)
+if(NOT TARGET GTest::gtest_main)
+    FetchContent_MakeAvailable(googletest)
+endif()
 
 add_executable(tibia-protocol-tests
     tests/test_rsa.cpp
@@ -342,6 +406,10 @@ add_executable(tibia-protocol-tests
 target_link_libraries(tibia-protocol-tests PRIVATE
     tibia-protocol
     GTest::gtest_main
+    OpenSSL::Crypto  # Tests may need crypto for verification
+)
+target_compile_definitions(tibia-protocol-tests PRIVATE
+    FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
 )
 add_test(NAME tibia-protocol-tests COMMAND tibia-protocol-tests)
 
@@ -359,10 +427,11 @@ The root `CMakeLists.txt` adds `lib/protocol/` via `add_subdirectory()` and can 
 
 ## Dependencies
 
-- **OpenSSL** (system-installed) — RSA encryption
+- **OpenSSL** (system-installed) — RSA encryption via EVP API
 - **libcurl** (system-installed, already required by sub-project 1) — HTTPS login API
-- **Google Test** (FetchContent or system, already available from sub-project 1) — testing
-- **POSIX sockets** — TCP connection (no additional library)
+- **nlohmann/json v3.11.3** (FetchContent, shared with sub-project 1 if built as subdirectory) — JSON parsing for login API responses
+- **Google Test v1.14.0** (FetchContent, shared with sub-project 1) — testing
+- **POSIX sockets** — TCP connection (macOS/Linux only, no additional library)
 
 ## Testing Strategy
 
