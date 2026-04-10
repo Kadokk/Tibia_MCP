@@ -1,7 +1,7 @@
-#include <iostream>
+#include "log.h"
 
 int main() {
-    std::cerr << "[INFO] Tibia MCP starting..." << std::endl;
-    std::cerr << "[INFO] Tibia MCP shutting down." << std::endl;
+    LOG(INFO, "Tibia MCP starting...");
+    LOG(INFO, "Tibia MCP shutting down.");
     return 0;
 }
