@@ -64,3 +64,13 @@ target_compile_definitions(tibia-protocol-tests PRIVATE
     FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
 )
 add_test(NAME tibia-protocol-tests COMMAND tibia-protocol-tests)
+
+# Live integration test (separate target, not in default ctest)
+add_executable(tibia-protocol-live-tests
+    tests/test_login_live.cpp
+)
+target_link_libraries(tibia-protocol-live-tests PRIVATE
+    tibia-protocol
+    GTest::gtest_main
+)
+# NOT added to add_test() — run manually with credentials
