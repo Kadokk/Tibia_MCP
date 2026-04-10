@@ -25,6 +25,7 @@ add_library(tibia-protocol STATIC
     src/http_login.cpp
     src/game_login.cpp
     src/battleye.cpp
+    src/client.cpp
 )
 
 target_include_directories(tibia-protocol PUBLIC include)
@@ -52,6 +53,7 @@ add_executable(tibia-protocol-tests
     tests/test_http_login.cpp
     tests/test_game_login.cpp
     tests/test_battleye.cpp
+    tests/test_client.cpp
 )
 target_include_directories(tibia-protocol-tests PRIVATE src)
 target_link_libraries(tibia-protocol-tests PRIVATE
