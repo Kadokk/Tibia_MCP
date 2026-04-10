@@ -27,6 +27,7 @@ find_package(SQLite3 REQUIRED)
 add_executable(tibia-mcp
     src/main.cpp
     src/cache/cache.cpp
+    src/http/client.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
@@ -39,13 +40,16 @@ target_link_libraries(tibia-mcp PRIVATE
 enable_testing()
 add_executable(tibia-mcp-tests
     tests/test_cache.cpp
+    tests/test_http_client.cpp
     src/cache/cache.cpp
+    src/http/client.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src)
 target_link_libraries(tibia-mcp-tests PRIVATE
     GTest::gtest_main
     nlohmann_json::nlohmann_json
     SQLite3::SQLite3
+    CURL::libcurl
 )
 target_compile_definitions(tibia-mcp-tests PRIVATE
     FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
