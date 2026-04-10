@@ -29,6 +29,7 @@ add_executable(tibia-mcp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
+    src/mcp/server.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
@@ -43,9 +44,11 @@ add_executable(tibia-mcp-tests
     tests/test_cache.cpp
     tests/test_http_client.cpp
     tests/test_transport.cpp
+    tests/test_server.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
+    src/mcp/server.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src)
 target_link_libraries(tibia-mcp-tests PRIVATE
