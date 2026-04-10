@@ -82,3 +82,6 @@ target_compile_definitions(tibia-mcp-tests PRIVATE
     FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
 )
 add_test(NAME tibia-mcp-tests COMMAND tibia-mcp-tests)
+
+# Protocol library (sub-project 2)
+add_subdirectory(lib/protocol)
