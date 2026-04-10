@@ -185,7 +185,7 @@ All Tibia packets follow this wire format:
 └──────────┴──────────┴────────────────────────────────┘
 ```
 
-Note: The Adler32 checksum covers the encrypted payload (everything after the checksum itself). Some newer protocol versions may omit the checksum — this must be verified against the current version via packet captures.
+**Important:** Tibia 11.11+ replaced Adler32 with a 32-bit sequence number in this field. Since we target 12.x+, the implementation should use an incrementing sequence number (starting at 0 for the first packet, incrementing per packet). The spec diagrams show "Adler32/checksum" for historical context, but the implementation will use sequence numbers. Verify exact behavior against packet captures.
 
 - All integers are little-endian
 - Strings are length-prefixed: uint16 length + raw bytes (no null terminator)
