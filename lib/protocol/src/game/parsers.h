@@ -13,7 +13,7 @@ namespace parsers {
         std::string text;
     };
     struct ChannelListEntry {
-        uint16_t id;
+        uint16_t id = 0;
         std::string name;
     };
     // Caller passes a Message positioned AFTER the opcode byte.
