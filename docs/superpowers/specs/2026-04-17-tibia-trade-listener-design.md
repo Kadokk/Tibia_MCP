@@ -74,13 +74,14 @@ Single-purpose binary. Runs continuously. One process per world (MVP: one proces
 3. Pick target character (env var `TIBIA_LISTENER_CHARACTER` if set, else first character on target world).
 4. Call `TibiaClient::connect()` — TCP handshake with game server.
 5. Send **Open Channel** packet (client opcode `0x97`) for Trade channel.
-6. Enter main loop.
+6. **Wait for the server's Channel List or Open Channel response** to learn the numeric Trade channel ID assigned by the server (channel IDs are not static — they are assigned per session). The listener is in a "joining" state until this ID is known.
+7. Enter main loop.
 
 ### Main loop
 - Blocking read on the game connection.
 - For each incoming packet:
-  - **Talk packet (`0xAA`)**: parse sender, level, type, channel ID, text. If channel ID matches Trade, insert into `raw_messages` synchronously.
-  - **Channel list / open-channel response**: record channel ID for Trade on first receipt.
+  - **Talk packet (`0xAA`)**: parse sender, level, type, channel ID, text. If channel ID matches Trade, insert into `raw_messages` synchronously. If we are still in the "joining" state (Trade channel ID not yet known), drop the packet — no Trade chat can legitimately arrive before join completes, and we have no way to confirm the channel anyway.
+  - **Channel list / open-channel response**: record channel ID for Trade on first receipt; exit "joining" state.
   - **Ping (`0x1D`)**: respond with Pong (`0x1E`).
   - **Kick / GM-action / logout-forced**: log and exit with nonzero status (supervisor restarts).
   - All other packets: ignore (still advance the XTEA frame counter).
@@ -104,13 +105,16 @@ Single-purpose binary. Runs every 60 seconds (cron / timer / long-running loop w
    - `(buy|b|buying)\s+(.+?)\s+(\d+\.?\d*)(k|kk|m)?`
    - `t\s+(.+?)\s+(\d+)` (trade / barter)
    - Plus patterns for batched offers: `sell x 100k, y 200k, z 50k`
-3. For each regex hit: resolve the item name against `item_registry` (slang + canonical). On hit, write to `trade_offers` with `parse_method = 'regex'`. On miss, mark `parsed_at` with `parse_method = 'unresolved'` and continue.
-4. **LLM pass** on regex misses (batched, up to 30 messages per call):
+3. For each regex hit: resolve the item name against `item_registry` (slang + canonical). On hit, write to `trade_offers` with `parse_method = 'regex'`. On miss (regex matched structure but item unknown), fall through to the LLM pass — the LLM is often able to identify items our registry hasn't been seeded with yet.
+4. **LLM pass** on regex misses *and* regex-parsed-but-unresolved messages (batched, up to 30 messages per call):
    - Prompt: structured JSON-schema response — `{ offer_type, item, quantity, price_gold, confidence }`.
    - Use Claude Haiku 4.5 (cheap, fast, enough for this parsing task).
    - On confidence ≥ 0.7 and resolvable item: insert into `trade_offers` with `parse_method = 'llm'`.
-   - On low confidence or unresolvable: mark `parse_method = 'llm_failed'`.
+   - On confidence ≥ 0.7 but still unresolvable item: insert with `item_canonical = item_raw` and `parse_method = 'llm_unresolved'` — the offer is captured but will need manual registry backfill to aggregate properly.
+   - On low confidence: mark `parse_method = 'llm_failed'`.
 5. Update `raw_messages.parsed_at` regardless of outcome.
+
+**Re-parsing:** Raw messages are retained indefinitely so the parser can be re-run over historical data when the regex patterns improve or the item registry grows. Triggering re-parse (`UPDATE raw_messages SET parsed_at = NULL WHERE ...`) is a manual operation for MVP, not an automated feature.
 
 ### Cost estimate (MVP, one world)
 - Trade channel on Antica: ~500–2000 messages/day (rough estimate; to be validated in first 48h).
@@ -119,7 +123,12 @@ Single-purpose binary. Runs every 60 seconds (cron / timer / long-running loop w
 - Haiku pricing: ~$0.10/day → ~$3/month. Negligible.
 
 ### Item registry
-Seeded from the existing TibiaWiki scraper output (sub-project 1 already has all item names). Extended with a hand-maintained slang dictionary (`sd` → `sudden death rune`, `sms` → `small magic shield`, etc.). The LLM pass can propose new slang entries for human review — out of scope for MVP but noted as a future capability.
+Sub-project 1's TibiaWiki scraper is on-demand per query, not a bulk dump, so seeding requires one of:
+- A one-time bulk scrape of TibiaWiki's item-list pages (~5k items total; rate-limited, ~1h runtime).
+- Import from TibiaData's `/items` endpoint (if available — verify during implementation planning).
+- A pre-extracted item list checked into the repo.
+
+Plan decides which. Extended at runtime with a hand-maintained slang dictionary (`sd` → `sudden death rune`, `sms` → `small magic shield`, etc.). The LLM pass can propose new slang entries for human review — out of scope for MVP but noted as a future capability.
 
 ## Component: MCP Tools (extensions to `tibia-mcp`)
 
@@ -172,11 +181,12 @@ CREATE TABLE raw_messages (
   world         TEXT NOT NULL,
   channel       TEXT NOT NULL,              -- 'trade' for MVP
   sender_name   TEXT NOT NULL,
-  sender_level  INTEGER,                    -- NULL if not provided in packet
+  sender_level  INTEGER,                    -- NULL only for system messages / GM broadcasts
+                                            --   (Trade channel player chat always carries level)
   text          TEXT NOT NULL,
-  received_at   INTEGER NOT NULL,           -- unix timestamp
+  received_at   INTEGER NOT NULL,           -- unix timestamp, set by listener on packet receipt
   parsed_at     INTEGER,                    -- NULL = unparsed
-  parse_method  TEXT                        -- 'regex' | 'llm' | 'llm_failed' | 'unresolved'
+  parse_method  TEXT                        -- 'regex' | 'llm' | 'llm_unresolved' | 'llm_failed'
 );
 CREATE INDEX idx_raw_unparsed  ON raw_messages(parsed_at) WHERE parsed_at IS NULL;
 CREATE INDEX idx_raw_received  ON raw_messages(received_at);
@@ -192,7 +202,8 @@ CREATE TABLE trade_offers (
   price_gold      INTEGER,                  -- NULL for barter offers
   sender_name     TEXT NOT NULL,
   sender_level    INTEGER,
-  offered_at      INTEGER NOT NULL,
+  offered_at      INTEGER NOT NULL,         -- copied from raw_messages.received_at
+                                            --   (Talk packets don't carry their own timestamp)
   parse_method    TEXT NOT NULL,
   confidence      REAL                      -- NULL for regex, 0–1 for LLM
 );
@@ -214,8 +225,8 @@ The core constraint: Tibia kicks characters idle for 15 minutes (no client-to-se
 **Chosen approach: turn character every 12 minutes.**
 - Client sends `0x6F` (Turn North) or `0x71` (Turn South), alternating.
 - Server acknowledges with a state-refresh packet.
-- Character does not move, NPCs are not addressed, no world-state mutation.
-- Other players see nothing unusual (character orientation updates are routine).
+- Character does not move, no position change, no NPC interaction.
+- Other nearby players will see a `CreatureTurn` update (character rotates in place) — cosmetically minor and routine (players turn constantly), but not literally invisible. This is the least-intrusive option among the anti-idle alternatives we considered.
 
 **Why not alternatives:**
 - **Walk-in-place (step + step back)**: generates two movement packets, visible to nearby players, bot character is "twitching" at the depot.
