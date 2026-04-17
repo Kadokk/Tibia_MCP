@@ -26,6 +26,8 @@ add_library(tibia-protocol STATIC
     src/game_login.cpp
     src/battleye.cpp
     src/client.cpp
+    src/game/packets.cpp
+    src/game/parsers.cpp
 )
 
 target_include_directories(tibia-protocol PUBLIC include)
