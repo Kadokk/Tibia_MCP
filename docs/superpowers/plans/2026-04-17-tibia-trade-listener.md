@@ -3081,6 +3081,7 @@ Create `src/mcp/tools/query_trade_offers.cpp`:
 ```cpp
 #include "mcp/tools/query_trade_offers.h"
 #include "store/trade_store.h"
+#include <algorithm>
 #include <sstream>
 #include <ctime>
 
