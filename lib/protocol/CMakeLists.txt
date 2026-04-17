@@ -56,6 +56,7 @@ add_executable(tibia-protocol-tests
     tests/test_game_login.cpp
     tests/test_battleye.cpp
     tests/test_client.cpp
+    tests/test_packets.cpp
 )
 target_include_directories(tibia-protocol-tests PRIVATE src)
 target_link_libraries(tibia-protocol-tests PRIVATE
