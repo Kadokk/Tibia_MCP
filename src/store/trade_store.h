@@ -29,6 +29,13 @@ struct TradeOffer {
     double confidence = 0.0;       // 0 for regex
 };
 
+struct TraderStats {
+    std::string sender_name;
+    int64_t total_offers = 0;
+    int64_t sell_offers = 0;
+    int64_t buy_offers = 0;
+};
+
 class TradeStore {
 public:
     explicit TradeStore(const std::string& db_path);
@@ -48,6 +55,11 @@ public:
     std::vector<TradeOffer> select_offers_by_sender(const std::string& sender_name,
                                                     int64_t since_unix,
                                                     int limit);
+
+    std::vector<TraderStats> select_top_traders(const std::string& world,
+                                                int64_t since_unix,
+                                                int min_offers,
+                                                int limit);
 
     void close();
 

@@ -222,3 +222,33 @@ std::vector<TradeOffer> TradeStore::select_offers_by_sender(const std::string& s
     sqlite3_finalize(stmt);
     return out;
 }
+
+std::vector<TraderStats> TradeStore::select_top_traders(const std::string& world,
+                                                         int64_t since_unix,
+                                                         int min_offers,
+                                                         int limit) {
+    const char* sql =
+        "SELECT sender_name, COUNT(*) AS total, "
+        "  SUM(CASE WHEN offer_type='sell' THEN 1 ELSE 0 END) AS sells, "
+        "  SUM(CASE WHEN offer_type='buy'  THEN 1 ELSE 0 END) AS buys "
+        "FROM trade_offers WHERE world = ? AND offered_at >= ? "
+        "GROUP BY sender_name HAVING total >= ? "
+        "ORDER BY total DESC LIMIT ?";
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(impl_->db, sql, -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, world.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 2, since_unix);
+    sqlite3_bind_int(stmt, 3, min_offers);
+    sqlite3_bind_int(stmt, 4, limit);
+    std::vector<TraderStats> out;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        TraderStats t;
+        t.sender_name = (const char*)sqlite3_column_text(stmt, 0);
+        t.total_offers = sqlite3_column_int64(stmt, 1);
+        t.sell_offers = sqlite3_column_int64(stmt, 2);
+        t.buy_offers  = sqlite3_column_int64(stmt, 3);
+        out.push_back(t);
+    }
+    sqlite3_finalize(stmt);
+    return out;
+}
