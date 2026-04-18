@@ -45,6 +45,7 @@ add_executable(tibia-mcp
     src/mcp/tools/search_bazaar.cpp
     src/mcp/tools/lookup_bazaar_auction.cpp
     src/mcp/tools/clear_cache.cpp
+    src/store/trade_store.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
@@ -63,6 +64,7 @@ add_executable(tibia-mcp-tests
     tests/test_tibiadata.cpp
     tests/test_tibiawiki.cpp
     tests/test_bazaar.cpp
+    tests/test_trade_store.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
@@ -70,6 +72,7 @@ add_executable(tibia-mcp-tests
     src/sources/tibiadata.cpp
     src/sources/tibiawiki.cpp
     src/sources/bazaar.cpp
+    src/store/trade_store.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src)
 target_link_libraries(tibia-mcp-tests PRIVATE
