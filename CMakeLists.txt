@@ -66,6 +66,7 @@ add_executable(tibia-mcp-tests
     tests/test_bazaar.cpp
     tests/test_trade_store.cpp
     tests/test_channel_joiner.cpp
+    tests/test_anti_idle.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
@@ -75,6 +76,7 @@ add_executable(tibia-mcp-tests
     src/sources/bazaar.cpp
     src/store/trade_store.cpp
     src/listener/channel_joiner.cpp
+    src/listener/anti_idle.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src lib/protocol/src lib/protocol/include)
 target_link_libraries(tibia-mcp-tests PRIVATE
