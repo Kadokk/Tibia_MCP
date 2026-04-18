@@ -15,6 +15,10 @@
 #include "mcp/tools/search_bazaar.h"
 #include "mcp/tools/lookup_bazaar_auction.h"
 #include "mcp/tools/clear_cache.h"
+#include "store/trade_store.h"
+#include "mcp/tools/query_trade_offers.h"
+#include "mcp/tools/get_price_history.h"
+#include "mcp/tools/list_active_traders.h"
 #include <csignal>
 #include <iostream>
 
@@ -36,6 +40,8 @@ int main() {
     Cache cache("tibia_mcp_cache.db");
     g_cache = &cache;
 
+    TradeStore trade_store("tibia_mcp_cache.db");
+
     McpServer server("tibia-mcp", "0.1.0");
 
     HttpClient http_client;
@@ -52,6 +58,9 @@ int main() {
     server.register_tool(std::make_unique<SearchBazaarTool>(http_client, cache));
     server.register_tool(std::make_unique<LookupBazaarAuctionTool>(http_client, cache));
     server.register_tool(std::make_unique<ClearCacheTool>(cache));
+    server.register_tool(std::make_unique<QueryTradeOffersTool>(trade_store));
+    server.register_tool(std::make_unique<GetPriceHistoryTool>(trade_store));
+    server.register_tool(std::make_unique<ListActiveTradersTool>(trade_store));
 
     while (true) {
         auto msg = JsonRpc::read_message(std::cin);
@@ -69,6 +78,7 @@ int main() {
     }
 
     cache.close();
+    trade_store.close();
     LOG(INFO, "Tibia MCP shut down cleanly.");
     return 0;
 }
