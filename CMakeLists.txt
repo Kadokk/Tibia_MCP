@@ -65,6 +65,7 @@ add_executable(tibia-mcp-tests
     tests/test_tibiawiki.cpp
     tests/test_bazaar.cpp
     tests/test_trade_store.cpp
+    tests/test_channel_joiner.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
@@ -73,13 +74,15 @@ add_executable(tibia-mcp-tests
     src/sources/tibiawiki.cpp
     src/sources/bazaar.cpp
     src/store/trade_store.cpp
+    src/listener/channel_joiner.cpp
 )
-target_include_directories(tibia-mcp-tests PRIVATE src)
+target_include_directories(tibia-mcp-tests PRIVATE src lib/protocol/src lib/protocol/include)
 target_link_libraries(tibia-mcp-tests PRIVATE
     GTest::gtest_main
     nlohmann_json::nlohmann_json
     SQLite3::SQLite3
     CURL::libcurl
+    tibia-protocol
 )
 target_compile_definitions(tibia-mcp-tests PRIVATE
     FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
