@@ -46,6 +46,7 @@ add_executable(tibia-mcp
     src/mcp/tools/lookup_bazaar_auction.cpp
     src/mcp/tools/clear_cache.cpp
     src/mcp/tools/query_trade_offers.cpp
+    src/mcp/tools/get_price_history.cpp
     src/store/trade_store.cpp
     src/llm/claude_client.cpp
     src/parser/item_registry.cpp
@@ -78,6 +79,7 @@ add_executable(tibia-mcp-tests
     tests/test_regex_parser.cpp
     tests/test_llm_parser.cpp
     tests/test_query_trade_offers.cpp
+    tests/test_get_price_history.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
@@ -94,6 +96,7 @@ add_executable(tibia-mcp-tests
     src/parser/regex_parser.cpp
     src/parser/llm_parser.cpp
     src/mcp/tools/query_trade_offers.cpp
+    src/mcp/tools/get_price_history.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src lib/protocol/src lib/protocol/include)
 target_link_libraries(tibia-mcp-tests PRIVATE
