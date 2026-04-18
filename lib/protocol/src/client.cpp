@@ -5,6 +5,7 @@
 #include "network/connection.h"
 #include "network/message.h"
 #include <cstring>
+#include <optional>
 
 struct TibiaClient::Impl {
     enum class State { Disconnected, Authenticated, Connected };
@@ -16,6 +17,9 @@ struct TibiaClient::Impl {
 
     // XTEA key (set during game login)
     uint32_t xtea_key[4] = {0};
+
+    // Monotonic sequence number for XTEA-framed packets (post-handshake traffic)
+    uint32_t sequence_num = 0;
 
     // Session data
     std::string session_token;
@@ -156,6 +160,43 @@ void TibiaClient::disconnect() {
 
 bool TibiaClient::is_connected() const {
     return impl_->state == Impl::State::Connected;
+}
+
+bool TibiaClient::send_packet(const Message& msg) {
+    if (impl_->state != Impl::State::Connected) return false;
+    auto frame = msg.encrypt_and_frame(impl_->xtea_key, impl_->sequence_num);
+    impl_->sequence_num++;
+    if (!impl_->connection.send_raw(frame.data(), frame.size())) {
+        impl_->state = Impl::State::Disconnected;
+        return false;
+    }
+    return true;
+}
+
+std::optional<Message> TibiaClient::recv_packet(int timeout_ms) {
+    if (impl_->state != Impl::State::Connected) return std::nullopt;
+    // Convert ms -> seconds (round up, minimum 1). The underlying Connection
+    // uses integer seconds; a 1-second floor is acceptable for the polling
+    // cadence we need (listener polls ~once/sec).
+    int seconds = (timeout_ms + 999) / 1000;
+    if (seconds < 1) seconds = 1;
+    impl_->connection.set_read_timeout(seconds);
+
+    auto raw = impl_->connection.recv_packet();
+    if (raw.empty()) {
+        // Timeout or disconnect. We can't distinguish from the current API;
+        // caller checks is_alive().
+        if (!impl_->connection.is_connected()) {
+            impl_->state = Impl::State::Disconnected;
+        }
+        return std::nullopt;
+    }
+    return Message::decrypt_and_unframe(raw, impl_->xtea_key);
+}
+
+bool TibiaClient::is_alive() const {
+    return impl_->state == Impl::State::Connected
+        && impl_->connection.is_connected();
 }
 
 void TibiaClient::set_rsa_key(const std::string& modulus, const std::string& exponent) {
