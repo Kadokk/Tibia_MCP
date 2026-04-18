@@ -45,6 +45,26 @@ TEST(TradeStoreTest, MarkParsedExcludesFromUnparsed) {
     std::remove(path.c_str());
 }
 
+TEST(TradeStoreTest, RawMessageWithNullSenderLevelRoundTrips) {
+    auto path = tmp_db();
+    {
+        TradeStore store(path);
+        RawMessage m;
+        m.world = "Antica";
+        m.channel = "trade";
+        m.sender_name = "UnknownLevel";
+        m.sender_level = 0;  // stored as SQL NULL
+        m.text = "buy excalibug 1gp";
+        m.received_at = 2000;
+        store.insert_raw_message(m);
+
+        auto unparsed = store.select_unparsed_messages(200);
+        ASSERT_EQ(unparsed.size(), 1u);
+        EXPECT_EQ(unparsed[0].sender_level, 0u);
+    }
+    std::remove(path.c_str());
+}
+
 TEST(TradeStoreTest, InsertAndQueryTradeOffer) {
     auto path = tmp_db();
     {

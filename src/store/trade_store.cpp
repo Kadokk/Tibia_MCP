@@ -123,7 +123,8 @@ std::vector<RawMessage> TradeStore::select_unparsed_messages(int limit) {
         m.world = (const char*)sqlite3_column_text(stmt, 1);
         m.channel = (const char*)sqlite3_column_text(stmt, 2);
         m.sender_name = (const char*)sqlite3_column_text(stmt, 3);
-        m.sender_level = (uint32_t)sqlite3_column_int(stmt, 4);
+        m.sender_level = sqlite3_column_type(stmt, 4) == SQLITE_NULL
+                         ? 0 : (uint32_t)sqlite3_column_int(stmt, 4);
         m.text = (const char*)sqlite3_column_text(stmt, 5);
         m.received_at = sqlite3_column_int64(stmt, 6);
         out.push_back(m);
