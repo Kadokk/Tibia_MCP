@@ -49,6 +49,7 @@ add_executable(tibia-mcp
     src/llm/claude_client.cpp
     src/parser/item_registry.cpp
     src/parser/regex_parser.cpp
+    src/parser/llm_parser.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
@@ -74,6 +75,7 @@ add_executable(tibia-mcp-tests
     tests/test_claude_client.cpp
     tests/test_item_registry.cpp
     tests/test_regex_parser.cpp
+    tests/test_llm_parser.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
@@ -88,6 +90,7 @@ add_executable(tibia-mcp-tests
     src/llm/claude_client.cpp
     src/parser/item_registry.cpp
     src/parser/regex_parser.cpp
+    src/parser/llm_parser.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src lib/protocol/src lib/protocol/include)
 target_link_libraries(tibia-mcp-tests PRIVATE
