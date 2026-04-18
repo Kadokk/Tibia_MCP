@@ -119,5 +119,20 @@ target_link_libraries(tibia-listener PRIVATE
     nlohmann_json::nlohmann_json
 )
 
+add_executable(tibia-parser
+    src/parser/main.cpp
+    src/parser/item_registry.cpp
+    src/parser/regex_parser.cpp
+    src/parser/llm_parser.cpp
+    src/llm/claude_client.cpp
+    src/store/trade_store.cpp
+)
+target_include_directories(tibia-parser PRIVATE src)
+target_link_libraries(tibia-parser PRIVATE
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
+    SQLite3::SQLite3
+)
+
 # Protocol library (sub-project 2)
 add_subdirectory(lib/protocol)
