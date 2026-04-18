@@ -53,6 +53,7 @@ int main() {
         LOG(ERROR, "Login failed: " << login.error);
         return 3;
     }
+    LOG(INFO, "Login successful");
 
     const Character* target_char = nullptr;
     const World* target_world = nullptr;
@@ -138,8 +139,9 @@ int main() {
 
     if (!client.is_alive()) {
         LOG(WARN, "Connection lost");
+    } else {
+        client.send_packet(packets::build_logout());
     }
-    client.send_packet(packets::build_logout());
     client.disconnect();
     store.close();
     LOG(INFO, "tibia-listener exited");

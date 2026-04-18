@@ -24,6 +24,7 @@ TradeStore::TradeStore(const std::string& db_path) : impl_(new Impl) {
         throw std::runtime_error("Failed to open trade store DB: " + db_path);
     }
     exec(impl_->db, "PRAGMA journal_mode=WAL");
+    exec(impl_->db, "PRAGMA busy_timeout=5000");
     exec(impl_->db,
         "CREATE TABLE IF NOT EXISTS raw_messages ("
         "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -84,7 +85,10 @@ int64_t TradeStore::insert_raw_message(const RawMessage& m) {
         "INSERT INTO raw_messages (world, channel, sender_name, sender_level, "
         "text, received_at) VALUES (?, ?, ?, ?, ?, ?)";
     sqlite3_stmt* stmt = nullptr;
-    sqlite3_prepare_v2(impl_->db, sql, -1, &stmt, nullptr);
+    if (sqlite3_prepare_v2(impl_->db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG(WARN, "insert_raw_message prepare failed: " << sqlite3_errmsg(impl_->db));
+        return 0;
+    }
     sqlite3_bind_text(stmt, 1, m.world.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 2, m.channel.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 3, m.sender_name.c_str(), -1, SQLITE_TRANSIENT);
@@ -92,7 +96,9 @@ int64_t TradeStore::insert_raw_message(const RawMessage& m) {
     else sqlite3_bind_int(stmt, 4, (int)m.sender_level);
     sqlite3_bind_text(stmt, 5, m.text.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, 6, m.received_at);
-    sqlite3_step(stmt);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        LOG(WARN, "insert_raw_message step failed: " << sqlite3_errmsg(impl_->db));
+    }
     sqlite3_finalize(stmt);
     return sqlite3_last_insert_rowid(impl_->db);
 }
@@ -101,11 +107,16 @@ void TradeStore::mark_parsed(int64_t raw_message_id, const std::string& parse_me
     const char* sql =
         "UPDATE raw_messages SET parsed_at = ?, parse_method = ? WHERE id = ?";
     sqlite3_stmt* stmt = nullptr;
-    sqlite3_prepare_v2(impl_->db, sql, -1, &stmt, nullptr);
+    if (sqlite3_prepare_v2(impl_->db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG(WARN, "mark_parsed prepare failed: " << sqlite3_errmsg(impl_->db));
+        return;
+    }
     sqlite3_bind_int64(stmt, 1, std::time(nullptr));
     sqlite3_bind_text(stmt, 2, parse_method.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, 3, raw_message_id);
-    sqlite3_step(stmt);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        LOG(WARN, "mark_parsed step failed: " << sqlite3_errmsg(impl_->db));
+    }
     sqlite3_finalize(stmt);
 }
 
@@ -140,7 +151,10 @@ void TradeStore::insert_trade_offer(const TradeOffer& o) {
         "sender_level, offered_at, parse_method, confidence) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
     sqlite3_stmt* stmt = nullptr;
-    sqlite3_prepare_v2(impl_->db, sql, -1, &stmt, nullptr);
+    if (sqlite3_prepare_v2(impl_->db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        LOG(WARN, "insert_trade_offer prepare failed: " << sqlite3_errmsg(impl_->db));
+        return;
+    }
     sqlite3_bind_int64(stmt, 1, o.raw_message_id);
     sqlite3_bind_text(stmt, 2, o.world.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 3, o.offer_type.c_str(), -1, SQLITE_TRANSIENT);
@@ -156,7 +170,9 @@ void TradeStore::insert_trade_offer(const TradeOffer& o) {
     sqlite3_bind_text(stmt, 11, o.parse_method.c_str(), -1, SQLITE_TRANSIENT);
     if (o.confidence == 0.0) sqlite3_bind_null(stmt, 12);
     else sqlite3_bind_double(stmt, 12, o.confidence);
-    sqlite3_step(stmt);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        LOG(WARN, "insert_trade_offer step failed: " << sqlite3_errmsg(impl_->db));
+    }
     sqlite3_finalize(stmt);
 }
 

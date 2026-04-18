@@ -1,6 +1,7 @@
 #include "mcp/tools/get_price_history.h"
 #include "store/trade_store.h"
 #include <sstream>
+#include <iomanip>
 #include <algorithm>
 #include <ctime>
 
@@ -30,8 +31,13 @@ static int64_t median(std::vector<int64_t> v) {
 }
 
 static std::string fmt_k(int64_t gold) {
-    if (gold >= 1000000) return std::to_string(gold / 1000) + "k";
-    if (gold >= 1000)    return std::to_string(gold / 1000) + "k";
+    if (gold >= 1000000 && gold % 100000 == 0) {
+        double m = gold / 1000000.0;
+        std::ostringstream s; s.precision(1);
+        s << std::fixed << m << "kk";
+        return s.str();
+    }
+    if (gold >= 1000) return std::to_string(gold / 1000) + "k";
     return std::to_string(gold);
 }
 
