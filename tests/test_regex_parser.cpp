@@ -80,3 +80,16 @@ TEST(RegexParserTest, BuyTibiaCoinsCommaPrice) {
     EXPECT_EQ(offers[0].item_canonical, "tibia coin");
     EXPECT_EQ(offers[0].price_gold, 32000);
 }
+
+TEST(RegexParserTest, MixedResolvedAndUnresolvedReturnsBoth) {
+    auto reg = make_test_registry();
+    RegexParser p(reg);
+    auto offers = p.parse("sell magic sword 500k and frobnicator 100k");
+    ASSERT_EQ(offers.size(), 2u);
+    // First offer resolved
+    EXPECT_FALSE(offers[0].regex_matched_but_unresolved);
+    EXPECT_EQ(offers[0].item_canonical, "magic sword");
+    // Second offer unresolved
+    EXPECT_TRUE(offers[1].regex_matched_but_unresolved);
+    EXPECT_EQ(offers[1].item_raw, "frobnicator");
+}

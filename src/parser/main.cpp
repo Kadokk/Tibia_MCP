@@ -64,28 +64,31 @@ int main() {
             const auto& m = batch[i];
             auto regex_offers = regex_parser.parse(m.text);
 
-            bool wrote_regex = false;
+            bool has_unresolved = false;
             for (const auto& r : regex_offers) {
-                if (r.regex_matched_but_unresolved) continue;  // let LLM try
-                TradeOffer o;
-                o.raw_message_id = m.id;
-                o.world = world;
-                o.offer_type = r.offer_type;
-                o.item_canonical = r.item_canonical;
-                o.item_raw = r.item_raw;
-                o.quantity = r.quantity;
-                o.price_gold = r.price_gold;
-                o.sender_name = m.sender_name;
-                o.sender_level = m.sender_level;
-                o.offered_at = m.received_at;
-                o.parse_method = "regex";
-                store.insert_trade_offer(o);
-                wrote_regex = true;
+                if (r.regex_matched_but_unresolved) { has_unresolved = true; break; }
             }
 
-            if (wrote_regex) {
+            if (!regex_offers.empty() && !has_unresolved) {
+                // All offers resolved — write and mark regex
+                for (const auto& r : regex_offers) {
+                    TradeOffer o;
+                    o.raw_message_id = m.id;
+                    o.world = world;
+                    o.offer_type = r.offer_type;
+                    o.item_canonical = r.item_canonical;
+                    o.item_raw = r.item_raw;
+                    o.quantity = r.quantity;
+                    o.price_gold = r.price_gold;
+                    o.sender_name = m.sender_name;
+                    o.sender_level = m.sender_level;
+                    o.offered_at = m.received_at;
+                    o.parse_method = "regex";
+                    store.insert_trade_offer(o);
+                }
                 store.mark_parsed(m.id, "regex");
             } else {
+                // Either no regex match, or at least one unresolved — defer to LLM
                 llm_indices.push_back(i);
                 llm_texts.push_back(m.text);
             }
