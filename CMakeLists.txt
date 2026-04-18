@@ -93,5 +93,19 @@ target_compile_definitions(tibia-mcp-tests PRIVATE
 )
 add_test(NAME tibia-mcp-tests COMMAND tibia-mcp-tests)
 
+add_executable(tibia-listener
+    src/listener/main.cpp
+    src/listener/channel_joiner.cpp
+    src/listener/anti_idle.cpp
+    src/listener/message_sink.cpp
+    src/store/trade_store.cpp
+)
+target_include_directories(tibia-listener PRIVATE src lib/protocol/src)
+target_link_libraries(tibia-listener PRIVATE
+    tibia-protocol
+    SQLite3::SQLite3
+    nlohmann_json::nlohmann_json
+)
+
 # Protocol library (sub-project 2)
 add_subdirectory(lib/protocol)
