@@ -22,4 +22,14 @@ describe('MarketQueryService', () => {
     expect(summary?.item).toBe('gold token');
     expect(repo.getPriceSummary).toHaveBeenCalledWith({ item: 'gold token', world: 'Antica', days: 7 });
   });
+
+  it('rejects blank item or world inputs before repository calls', async () => {
+    const repo = { getPriceSummary: vi.fn(), listRecentOffers: vi.fn() };
+    const service = new MarketQueryService(repo);
+
+    await expect(service.getPriceSummary({ item: '   ', world: 'Antica', days: 7 })).rejects.toThrow(/item is required/);
+    await expect(service.listRecentOffers({ item: 'gold token', world: '', limit: 5 })).rejects.toThrow(/world is required/);
+    expect(repo.getPriceSummary).not.toHaveBeenCalled();
+    expect(repo.listRecentOffers).not.toHaveBeenCalled();
+  });
 });

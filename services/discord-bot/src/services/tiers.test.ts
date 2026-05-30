@@ -14,4 +14,13 @@ describe('getTierLimits', () => {
     expect(limits.dmAlerts).toBe(true);
     expect(limits.itemAlerts).toBe(25);
   });
+
+  it('returns frozen copies to prevent tier limit mutation', () => {
+    const limits = getTierLimits('free');
+    expect(Object.isFrozen(limits)).toBe(true);
+    expect(() => {
+      (limits as { itemAlerts: number }).itemAlerts = 999;
+    }).toThrow(TypeError);
+    expect(getTierLimits('free').itemAlerts).toBe(1);
+  });
 });

@@ -2,6 +2,7 @@ import pg from 'pg';
 
 export type Queryable = {
   query(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }>;
+  end?: () => Promise<void>;
 };
 
 export class DbClient {
@@ -10,6 +11,10 @@ export class DbClient {
   async query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     const result = await this.pool.query(sql, params);
     return result.rows as T[];
+  }
+
+  async end(): Promise<void> {
+    await this.pool.end?.();
   }
 }
 

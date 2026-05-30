@@ -1,4 +1,5 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, type Interaction } from 'discord.js';
+import { createInteractionDispatcher, type InteractionDispatcher } from './interactionDispatcher';
 
 type MinimalClient = {
   once(event: string, handler: (...args: unknown[]) => void): unknown;
@@ -10,12 +11,20 @@ export function createDiscordClient(): Client {
   return new Client({ intents: [GatewayIntentBits.Guilds] });
 }
 
-export async function startDiscordBot(input: { client: MinimalClient; token: string }): Promise<void> {
+export async function startDiscordBot(input: {
+  client: MinimalClient;
+  token: string;
+  dispatcher?: InteractionDispatcher;
+}): Promise<void> {
+  const dispatcher = input.dispatcher ?? createInteractionDispatcher();
+
   input.client.once('ready', () => {
     console.log('TibiaEdge Discord bot ready');
   });
-  input.client.on('interactionCreate', () => {
-    // Command dispatch is added in a later task.
+  input.client.on('interactionCreate', (interaction) => {
+    void dispatcher(interaction as Interaction).catch((error: unknown) => {
+      console.error('Failed to dispatch Discord interaction', error);
+    });
   });
   await input.client.login(input.token);
 }

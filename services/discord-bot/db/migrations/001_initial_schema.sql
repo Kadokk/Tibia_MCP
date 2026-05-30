@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS discord_guilds (
   discord_guild_id TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   default_world_id BIGINT REFERENCES worlds(id),
-  tier TEXT NOT NULL DEFAULT 'free',
+  tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'guild_pro', 'admin', 'disabled')),
   market_alert_channel_id TEXT,
   bazaar_alert_channel_id TEXT,
   report_channel_id TEXT,
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS discord_users (
   id BIGSERIAL PRIMARY KEY,
   discord_user_id TEXT NOT NULL UNIQUE,
   username TEXT NOT NULL,
-  tier TEXT NOT NULL DEFAULT 'free',
+  tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'guild_pro', 'admin', 'disabled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -89,9 +89,9 @@ CREATE TABLE IF NOT EXISTS alert_rules (
   owner_type TEXT NOT NULL CHECK (owner_type IN ('user', 'guild')),
   owner_id BIGINT NOT NULL,
   guild_id BIGINT REFERENCES discord_guilds(id),
-  alert_type TEXT NOT NULL,
+  alert_type TEXT NOT NULL CHECK (alert_type IN ('item_price', 'bazaar_filter')),
   world_id BIGINT REFERENCES worlds(id),
-  delivery TEXT NOT NULL DEFAULT 'channel',
+  delivery TEXT NOT NULL DEFAULT 'channel' CHECK (delivery IN ('channel', 'dm')),
   channel_id TEXT,
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   rule_json JSONB NOT NULL,
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS alert_deliveries (
   source_id BIGINT NOT NULL,
   destination_type TEXT NOT NULL,
   destination_id TEXT NOT NULL,
-  status TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('sent', 'failed', 'skipped')),
   reason TEXT,
   sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(alert_rule_id, source_type, source_id, destination_type, destination_id)

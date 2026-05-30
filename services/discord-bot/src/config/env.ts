@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
+const snowflakeSchema = z.string().trim().regex(/^\d{17,20}$/, 'must be a Discord snowflake');
+
 const envSchema = z.object({
-  DISCORD_TOKEN: z.string().min(1),
-  DISCORD_CLIENT_ID: z.string().min(1),
-  DISCORD_GUILD_ID: z.string().optional(),
-  DATABASE_URL: z.string().min(1),
+  DISCORD_TOKEN: z.string().trim().min(1),
+  DISCORD_CLIENT_ID: snowflakeSchema,
+  DISCORD_GUILD_ID: snowflakeSchema.optional(),
+  DATABASE_URL: z.string().trim().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development')
 });
 

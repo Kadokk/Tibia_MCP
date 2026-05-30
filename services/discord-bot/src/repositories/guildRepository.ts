@@ -8,7 +8,7 @@ export type GuildSetupInput = {
 };
 
 export type GuildRecord = {
-  id: number;
+  id: string;
   discordGuildId: string;
   name: string;
   tier: 'free' | 'guild_pro' | 'disabled';

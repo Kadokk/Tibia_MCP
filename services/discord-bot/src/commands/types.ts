@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import type { ChatInputCommandInteraction, RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js';
 
 export type CommandResponse = {
   content: string;
@@ -9,8 +9,13 @@ export type CommandContext = {
   interaction: ChatInputCommandInteraction;
 };
 
+export type CommandData = {
+  readonly name: string;
+  toJSON(): RESTPostAPIChatInputApplicationCommandsJSONBody;
+};
+
 export type BotCommand = {
-  data: SlashCommandBuilder;
+  data: CommandData;
   execute(context: CommandContext): Promise<CommandResponse>;
 };
 

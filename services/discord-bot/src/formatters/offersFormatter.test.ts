@@ -5,7 +5,7 @@ describe('formatRecentOffers', () => {
   it('formats recent offers', () => {
     const text = formatRecentOffers([
       {
-        id: 1,
+        id: '1',
         offerType: 'sell',
         item: 'gold token',
         priceGold: 43000,

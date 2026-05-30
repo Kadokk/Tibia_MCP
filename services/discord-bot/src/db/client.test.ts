@@ -11,4 +11,13 @@ describe('DbClient', () => {
     expect(rows).toEqual([{ ok: true }]);
     expect(pool.query).toHaveBeenCalledWith('select $1::bool as ok', [true]);
   });
+
+  it('closes pools that support end', async () => {
+    const pool = { query: vi.fn(), end: vi.fn().mockResolvedValue(undefined) };
+    const db = new DbClient(pool);
+
+    await db.end();
+
+    expect(pool.end).toHaveBeenCalledOnce();
+  });
 });

@@ -9,7 +9,7 @@ export type PriceSummary = {
 };
 
 export type RecentOffer = {
-  id: number;
+  id: string;
   offerType: 'buy' | 'sell' | 'trade';
   item: string;
   priceGold: number | null;

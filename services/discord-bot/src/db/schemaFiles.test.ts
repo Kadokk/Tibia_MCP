@@ -8,4 +8,10 @@ describe('initial schema', () => {
     expect(initialSchemaSql).toContain('CREATE TABLE IF NOT EXISTS discord_guilds');
     expect(initialSchemaSql).toContain('CREATE TABLE IF NOT EXISTS alert_rules');
   });
+
+  it('constrains tier, delivery, and alert delivery status domains', () => {
+    expect(initialSchemaSql).toContain("CHECK (tier IN ('free', 'pro', 'guild_pro', 'admin', 'disabled'))");
+    expect(initialSchemaSql).toContain("CHECK (delivery IN ('channel', 'dm'))");
+    expect(initialSchemaSql).toContain("CHECK (status IN ('sent', 'failed', 'skipped'))");
+  });
 });
