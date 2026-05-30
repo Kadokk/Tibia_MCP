@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
   guild_id BIGINT REFERENCES discord_guilds(id),
   alert_type TEXT NOT NULL CHECK (alert_type IN ('item_price', 'bazaar_filter')),
   world_id BIGINT REFERENCES worlds(id),
-  delivery TEXT NOT NULL DEFAULT 'channel' CHECK (delivery IN ('channel', 'dm')),
+  delivery TEXT NOT NULL DEFAULT 'channel' CHECK (delivery IN ('channel', 'dm', 'both')),
   channel_id TEXT,
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   rule_json JSONB NOT NULL,
