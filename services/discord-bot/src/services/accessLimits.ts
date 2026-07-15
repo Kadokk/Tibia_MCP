@@ -13,6 +13,14 @@ export class AccessLimitsService {
     return { allowed: true };
   }
 
+  canAskAi(input: { tier: Tier; aiQuestionsUsedToday: number }): Decision {
+    const limits = getTierLimits(input.tier);
+    if (input.aiQuestionsUsedToday >= limits.aiQuestionsPerDay) {
+      return { allowed: false, reason: `Daily AI question limit reached (${limits.aiQuestionsPerDay}/day on the ${input.tier} tier). Upgrade or try again tomorrow.` };
+    }
+    return { allowed: true };
+  }
+
   canUseDelivery(tier: Tier, delivery: Delivery): Decision {
     const limits = getTierLimits(tier);
     if ((delivery === 'dm' || delivery === 'both') && !limits.dmAlerts) {
