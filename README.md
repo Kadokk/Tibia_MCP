@@ -56,7 +56,7 @@ googletest are fetched automatically.
 ```bash
 cmake -S . -B build
 cmake --build build
-ctest --test-dir build            # runs tibia-mcp-tests (40 tests)
+ctest --test-dir build            # runs tibia-mcp-tests (52 tests)
 ```
 
 Binaries land in `build/`: `tibia-mcp` (the MCP server, stdio) plus `tibia-mcp-tests`.
