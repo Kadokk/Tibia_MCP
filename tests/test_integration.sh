@@ -32,7 +32,7 @@ RESPONSE=$(
 )
 
 echo "$RESPONSE" | grep -q '"tools"' && echo "PASS: tools/list returned tools" || echo "FAIL: tools/list"
-TOOL_COUNT=$(echo "$RESPONSE" | grep -o '"name"' | wc -l)
+TOOL_COUNT=$(echo "$RESPONSE" | grep -o '"inputSchema"' | wc -l)
 echo "Tools found: $TOOL_COUNT"
 [ "$TOOL_COUNT" -ge 12 ] && echo "PASS: all $TOOL_COUNT tools registered" || echo "FAIL: expected at least 12 tools, found $TOOL_COUNT"
 
