@@ -8,7 +8,7 @@ public APIs expose (TibiaData + TibiaWiki/Bazaar), surfaced through an AI assist
 > [`docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md`](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md)
 > and the Phase 0/1 implementation plans in [`docs/superpowers/plans/`](docs/superpowers/plans/).
 
-> **Where we stand (2026-07-14):** the read-only data MCP is solid and well-tested (12 tools). The
+> **Where we stand (2026-07-14):** the read-only data MCP is solid and well-tested (14 tools). The
 > live trade-channel listener, trade parser, and protocol library have been **archived** (git tag
 > `archive/live-listener`) — packet reading is permanently out of scope. The Discord bot is clean
 > TDD scaffolding that does not yet do anything at runtime.
@@ -17,7 +17,7 @@ public APIs expose (TibiaData + TibiaWiki/Bazaar), surfaced through an AI assist
 
 | Component | Path | Status | Notes |
 |---|---|---|---|
-| **Data MCP** (`tibia-mcp`) | `src/mcp/`, `src/sources/`, `src/cache/` | ✅ Working, tested | 12 tools; TibiaData API + TibiaWiki/Bazaar scraping; SQLite cache. ToS-legal. |
+| **Data MCP** (`tibia-mcp`) | `src/mcp/`, `src/sources/`, `src/cache/` | ✅ Working, tested | 14 tools; TibiaData API + TibiaWiki/Bazaar scraping (incl. `refresh_bazaar_history` + `valuate_auction` for ended-auction comparables); SQLite cache. ToS-legal. |
 | **Protocol library** | archived | 📦 Archived (git tag `archive/live-listener`) | packet reading is permanently out of scope — see docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md. |
 | **Trade listener** | archived | 📦 Archived (git tag `archive/live-listener`) | packet reading is permanently out of scope — see docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md. |
 | **Trade parser** | archived | 📦 Archived (git tag `archive/live-listener`) | packet reading is permanently out of scope — see docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md. |
@@ -27,13 +27,13 @@ Legend: ✅ working · ⚠️ partial · 🚧 scaffolding · ⛔ blocked · 📦
 
 ## Architecture
 
-The `tibia-mcp` server is a single C++ process exposing 12 read-only tools over stdio JSON-RPC,
+The `tibia-mcp` server is a single C++ process exposing 14 read-only tools over stdio JSON-RPC,
 backed by a SQLite cache (`tibia_mcp_cache.db`, WAL mode). A separate TypeScript service is the
 planned product layer.
 
 ```
    LLM client
-      |  stdio JSON-RPC (12 tools)
+      |  stdio JSON-RPC (14 tools)
       v
    tibia-mcp  --HTTP-->  TibiaData API / TibiaWiki / Bazaar
       |
@@ -99,7 +99,7 @@ server the only relevant variable is:
 
 ## Sub-project history
 
-1. **Data MCP** — complete. 12 MCP tools, SQLite cache with per-tool TTLs + stale fallback.
+1. **Data MCP** — complete. 14 MCP tools (incl. `refresh_bazaar_history` + `valuate_auction`), SQLite cache with per-tool TTLs + stale fallback.
 2. **Protocol library** — 📦 archived (git tag `archive/live-listener`); packet reading is permanently out of scope.
 3. **Trade listener + parser** — 📦 archived (git tag `archive/live-listener`); packet reading is permanently out of scope.
 4. **Productization (TibiaEdge Discord bot)** — in progress; scaffolding only.

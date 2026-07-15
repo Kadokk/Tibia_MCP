@@ -15,6 +15,7 @@
 #include "mcp/tools/search_bazaar.h"
 #include "mcp/tools/lookup_bazaar_auction.h"
 #include "mcp/tools/refresh_bazaar_history.h"
+#include "mcp/tools/valuate_auction.h"
 #include "mcp/tools/clear_cache.h"
 #include "store/bazaar_store.h"
 #include <csignal>
@@ -56,6 +57,7 @@ int main() {
     server.register_tool(std::make_unique<SearchBazaarTool>(http_client, cache));
     server.register_tool(std::make_unique<LookupBazaarAuctionTool>(http_client, cache));
     server.register_tool(std::make_unique<RefreshBazaarHistoryTool>(http_client, bazaar_store));
+    server.register_tool(std::make_unique<ValuateAuctionTool>(http_client, cache, bazaar_store));
     server.register_tool(std::make_unique<ClearCacheTool>(cache));
 
     while (true) {
