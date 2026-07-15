@@ -6,7 +6,9 @@
 
 ## Overview
 
-TibiaEdge is an AI companion for the MMORPG Tibia, delivered as a Discord bot. Players ask it anything — "is this axe auction on Antica underpriced?", "where should a level 80 paladin hunt?" — and it answers in their language with data fetched live from the market cache, the char bazaar, TibiaData, and TibiaWiki. It never invents numbers: every price and claim traces to a tool result, and answers state data freshness.
+TibiaEdge is an AI companion for the MMORPG Tibia, delivered as a Discord bot. Players ask it anything — "is this axe auction on Antica underpriced?", "where should a level 80 paladin hunt?" — and it answers in their language with data fetched live from the char bazaar, NPC price tables, TibiaData, and TibiaWiki. It never invents numbers: every price and claim traces to a tool result, and answers state data freshness.
+
+**Price data in v1 comes from two legal sources:** char-bazaar auctions (scraped from the official public website) and static NPC buy/sell values (from wiki data). Live player-market prices have no legal source once the packet listener is archived, so they are explicitly out of v1 (see Non-goals).
 
 Positioning: **"The AI companion for Tibia — ask anything and get answers grounded in live market, Bazaar, and game data."**
 
@@ -24,6 +26,7 @@ The product is completely legal: it reads only public web data and licensed wiki
 | Audience | Multilingual from day one (EN, ES, PT, PL tested) |
 | 6-month goal | Path to full-time project ($2k+/mo trajectory) |
 | Build approach | AI-first on the existing TibiaEdge foundation (TS bot + C++ MCP) |
+| Price data (post-listener) | Char-bazaar auctions + static NPC values; live market prices out of v1 |
 
 ## Product definition
 
@@ -31,7 +34,7 @@ The product is completely legal: it reads only public web data and licensed wiki
 
 | Capability | Free | Premium (~$4.99/mo) |
 |---|---|---|
-| Slash commands: `/price`, `/offers`, `/char`, `/boosted` | Unlimited (rate-limited) | Unlimited |
+| Slash commands: `/price` (NPC values + recent bazaar signals), `/auction`, `/char`, `/boosted` | Unlimited (rate-limited) | Unlimited |
 | AI questions: `/ask` or @mention | 5/day | 200/day fair-use |
 | Active alerts | 2, channel delivery | 25, DM delivery |
 | Scheduled daily market report | — | Yes |
@@ -50,19 +53,19 @@ The assistant replies in the language of the question. English, Spanish, Portugu
 
 Five components on one ~$8/mo VPS (docker-compose: bot + Postgres):
 
-1. **Discord bot** (`services/discord-bot`, existing TypeScript + discord.js). Gains: `/ask` command and @mention handler, usage metering, Stripe webhook listener, alert scheduler built on the existing `itemAlertEvaluator` and `alertRepository`. Keeps the existing raw-`pg` repositories and schema files.
+1. **Discord bot** (`services/discord-bot`, existing TypeScript + discord.js). Gains: `/ask` command and @mention handler, usage metering, Stripe webhook listener (reachable through a Caddy reverse proxy on the VPS), alert scheduler built on the existing `alertRepository` and an evaluator adapted from `itemAlertEvaluator` to bazaar-auction and boosted-boss rules. Keeps the existing raw-`pg` repositories and schema files. The existing `/price` command repoints to NPC values + recent bazaar signals; `/offers` (built on listener-fed market offers) is replaced by `/auction` (bazaar search).
 2. **Agent loop** (new module inside the bot). Anthropic SDK tool-runner with Claude Haiku 4.5. Prompt caching on the system prompt and tool definitions. Max 8 tool-call rounds and a modest `max_tokens` per question.
-3. **C++ MCP server** (existing, 15 tools). Launched as a child process over stdio. Continues to own the SQLite cache and the Bazaar/market scrapers. Built into the bot's Docker image via a multi-stage build.
+3. **C++ MCP server** (existing; 12 active tools after Phase 0). Launched as a child process over stdio. Continues to own the SQLite cache, the bazaar scraper, and the TibiaData/TibiaWiki sources. The three listener-fed tools (`query_trade_offers`, `get_price_history`, `list_active_traders`) are archived with the listener — they would otherwise serve permanently empty tables. Built into the bot's Docker image via a multi-stage build.
 4. **TibiaData client**. Thin REST tool for character, world, and boosted lookups. No cache.
-5. **Knowledge base**. An ingestion job pulls TibiaWiki (CC-licensed) into an SQLite FTS5 table, exposed to the agent as a `search_wiki` tool. No embeddings in v1; add them only if FTS quality disappoints.
+5. **Knowledge base**. The MCP's existing `search_wiki` tool (live MediaWiki API search with a 1-hour cache) serves game-knowledge questions in v1. A local FTS5 mirror of TibiaWiki is deliberately deferred: build it only if live search quality or latency disappoints in beta. No embeddings in v1 either.
 
 ### Data flow — a question
 
-`/ask` → meter check (free quota or premium role) → agent loop → Claude calls tools (MCP market data, Bazaar cache, TibiaData, wiki search) → grounded answer with freshness note → Discord embed reply → usage row recorded (user, tokens, cost).
+`/ask` → meter check (free quota or premium role) → agent loop → Claude calls tools (bazaar cache, NPC prices, TibiaData, wiki search) → grounded answer with freshness note → Discord embed reply → usage row recorded (user, tokens, cost).
 
 ### Data flow — alerts
 
-Scheduled scrapes refresh the cache (market ~15 min, Bazaar hourly, wiki weekly) → evaluator diffs new data against alert rules → deliveries to channel/DM with per-guild cooldown and hourly cap → delivery log for dedupe.
+Scheduled scrapes refresh the bazaar cache (hourly) and boosted boss/creature data (daily) → evaluator diffs new data against alert rules (auction criteria, boosted matches, NPC-vs-bazaar spread) → deliveries to channel/DM with per-guild cooldown and hourly cap → delivery log for dedupe.
 
 ## Cost control
 
@@ -85,9 +88,9 @@ Scheduled scrapes refresh the cache (market ~15 min, Bazaar hourly, wiki weekly)
 
 ## Phased rollout
 
-- **Phase 0 — repo hygiene (days):** archive the live listener to tag `archive/live-listener` and delete it from the active tree; commit the pending `.gitignore` fix; correct the README tool count (15); remove dead rate-limit scaffolding.
-- **Phase 1 — core assistant (~2-3 weeks):** agent loop, `/ask` with MCP market tools and TibiaData lookups, metering and free quota, VPS deployment, private beta in 2-3 friendly Discord servers.
-- **Phase 2 — game knowledge (~1-2 weeks):** TibiaWiki ingestion, `search_wiki`, multilingual answer QA.
+- **Phase 0 — repo hygiene (days):** archive the live listener and the three listener-fed MCP tools to tag `archive/live-listener` and delete them from the active tree (15 → 12 tools); commit the pending `.gitignore` fix; correct the README tool count; remove dead rate-limit scaffolding.
+- **Phase 1 — core assistant (~2-3 weeks):** agent loop, `/ask` with bazaar/NPC-price MCP tools and TibiaData lookups; build `/char` and `/boosted` commands on the TibiaData client and repoint `/price`, replace `/offers` with `/auction`; metering and free quota; VPS deployment; private beta in 2-3 friendly Discord servers.
+- **Phase 2 — game knowledge (~1-2 weeks):** wire the existing `search_wiki` MCP tool into the agent, multilingual answer QA.
 - **Phase 3 — alerts and revenue (~2 weeks):** alert scheduler, Stripe payment link and premium role, public launch (Tibia Discords, r/TibiaMMO, fansite communities).
 
 **Phase 3 exit criterion: at least one stranger pays.** If nobody does, adjust price or packaging before spending on promotion.
@@ -95,7 +98,7 @@ Scheduled scrapes refresh the cache (market ~15 min, Bazaar hourly, wiki weekly)
 ## Testing
 
 - Existing suites stay green: vitest in `services/discord-bot`, ~130 C++ assertions via ctest.
-- **Golden-set agent eval** (the new, load-bearing layer): 30-50 canned questions across EN/ES/PT/PL, run against recorded tool fixtures (record/replay — no live API in CI). Assertions:
+- **Golden-set agent eval** (the new, load-bearing layer): 30-50 canned questions across EN/ES/PT/PL. Tool results are recorded fixtures (replay); the Claude call runs **live** — replaying completions would make the assertions test nothing. At Haiku prices a full run costs well under $1, so it runs on demand and nightly, not per commit. Assertions:
   1. Every number in the answer traces to a tool result.
   2. The reply language matches the question language.
   3. Botting/automation questions get refused.
@@ -103,8 +106,9 @@ Scheduled scrapes refresh the cache (market ~15 min, Bazaar hourly, wiki weekly)
 
 ## Non-goals (v1)
 
+- **Live player-market (in-game Market) prices.** No legal source exists once the listener is archived. Revisit only via a data partnership or an officially sanctioned source — never via client/packet/screen reading.
 - Web dashboard, public API, mobile app.
-- Embeddings/vector search.
+- Local TibiaWiki FTS5 mirror and embeddings/vector search (the live `search_wiki` tool serves v1).
 - Full Stripe billing portal.
 - Gameplay automation, client interaction, packet reading — permanently out, not just deferred.
 - Per-server (guild-wide) premium tier — revisit after per-user validates.
