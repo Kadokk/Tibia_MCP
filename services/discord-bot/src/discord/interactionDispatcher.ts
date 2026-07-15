@@ -26,6 +26,6 @@ export function createInteractionDispatcher(commands: BotCommand[] = registeredC
     }
 
     const response = await command.execute({ interaction });
-    await reply(interaction, response);
+    if (response !== null) await reply(interaction, response);
   };
 }

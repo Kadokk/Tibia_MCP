@@ -43,4 +43,18 @@ describe('createInteractionDispatcher', () => {
 
     expect(interaction.reply).toHaveBeenCalledWith({ content: 'Unknown command: missing', ephemeral: true });
   });
+
+  it('does not reply when a command returns null (it already replied itself)', async () => {
+    const interaction = chatInput('ask');
+    const dispatcher = createInteractionDispatcher([
+      {
+        data: new SlashCommandBuilder().setName('ask').setDescription('Ask'),
+        execute: vi.fn().mockResolvedValue(null)
+      }
+    ]);
+
+    await dispatcher(interaction as never);
+
+    expect(interaction.reply).not.toHaveBeenCalled();
+  });
 });
