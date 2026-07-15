@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md`. **Prerequisite:** Phase 0 plan completed (12 tools, listener stack archived).
 
+**Task order:** 1→2→3 (bot foundation), 4→5→6→6.5 (C++ data layer + transport), 7→8→9→10→11 (assistant + commands), 12→13→14 (quality + deploy). Task 6.5 must precede Task 7.
+
 **Conventions (follow existing code):** bot tests inject `vi.fn()` fakes (see `src/services/marketQueryService.test.ts`); repositories take a `DbClient`; C++ tools copy the `SearchWikiTool` pattern (`src/mcp/tools/search_wiki.cpp`); C++ tests are fixture-driven GoogleTest (`tests/test_bazaar.cpp`). Run bot checks from `services/discord-bot/`: `npx vitest run`, `npm run typecheck`, `npm run lint`. Run C++ checks from repo root: `cmake --build build && ctest --test-dir build --output-on-failure`.
 
 ---
@@ -74,7 +76,7 @@ canAskAi(input: { tier: Tier; aiQuestionsUsedToday: number }): Decision {
 DROP TABLE IF EXISTS trade_offers;
 DROP TABLE IF EXISTS trade_raw_messages;
 
-CREATE TABLE ai_usage (
+CREATE TABLE IF NOT EXISTS ai_usage (
     id BIGSERIAL PRIMARY KEY,
     discord_user_id TEXT NOT NULL,
     day DATE NOT NULL,
@@ -84,9 +86,9 @@ CREATE TABLE ai_usage (
     cost_usd_micros BIGINT NOT NULL DEFAULT 0,
     UNIQUE (discord_user_id, day)
 );
-CREATE INDEX idx_ai_usage_day ON ai_usage (day);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_day ON ai_usage (day);
 
-CREATE TABLE user_tiers (
+CREATE TABLE IF NOT EXISTS user_tiers (
     discord_user_id TEXT PRIMARY KEY,
     tier TEXT NOT NULL DEFAULT 'free',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -127,20 +129,14 @@ export async function runMigrations(db: DbClient, migrations: Migration[]): Prom
   const applied: string[] = [];
   for (const m of migrations) {
     if (done.has(m.name)) continue;
-    await db.query('BEGIN');
-    try {
-      await db.query(m.sql);
-      await db.query('INSERT INTO schema_migrations (name) VALUES ($1)', [m.name]);
-      await db.query('COMMIT');
-      applied.push(m.name);
-    } catch (err) {
-      await db.query('ROLLBACK');
-      throw err;
-    }
+    await db.query(m.sql);
+    await db.query('INSERT INTO schema_migrations (name) VALUES ($1)', [m.name]);
+    applied.push(m.name);
   }
   return applied;
 }
 ```
+(No `BEGIN`/`COMMIT` wrapper: `DbClient` runs over a `pg.Pool`, which doesn't pin statements to one connection, so pool-level transactions are a footgun. The migrations are written idempotently — `IF NOT EXISTS` / `IF EXISTS` — so a crash mid-migration is recoverable by rerunning.)
 
 - [ ] **Step 4: Extend `env.ts`** (all Phase 1 vars in one edit; keep zod style):
 
@@ -389,6 +385,7 @@ Spec definition: reference value = median winning bid of ended auctions with sam
 - Range: 900 - 4,100 TC
 ```
   - `count < 5` → append `⚠ Low confidence: only N comparable auctions.` `count == 0` → return "No comparable ended auctions found — run refresh_bazaar_history first or widen criteria." (not an error).
+  - **Freshness (spec requirement — every tool result carries a data-age note):** append a line derived from the cohort's newest `fetched_at`, e.g. `Data age: bazaar history last refreshed 42 minutes ago.` (add a `newest_fetched_at` field to `CohortResult` in Task 5's store).
   - Description string must tell the model when to use it: `"Estimate a Tibia character auction's reference value from comparable ended auctions (median winning bid, Tibia Coins). Call when the user asks whether an auction/character price is fair."`
 
 - [ ] **Step 3: Register in `main.cpp`** (14 tools total now), add to CMake, build, full ctest green.
@@ -396,6 +393,29 @@ Spec definition: reference value = median winning bid of ended auctions with sam
 - [ ] **Step 4: Update README** — tool count 12 → 14, one-line mentions of the two new tools.
 
 - [ ] **Step 5: Commit** — `feat(mcp): valuate_auction comparables tool (12 -> 14 tools)`
+
+---
+
+### Task 6.5: Switch the C++ MCP transport to newline-delimited framing
+
+**Files:**
+- Modify: `src/mcp/transport.cpp` (lines 38–62: `read_message` / `write_message`)
+- Modify: `tests/test_transport.cpp` (`ReadFromStream` / `WriteToStream` assert Content-Length framing explicitly)
+
+**Why:** the current transport uses `Content-Length:` framing, but the MCP SDK's `StdioClientTransport` (Task 7) speaks **newline-delimited JSON-RPC** — one JSON object per line. Without this change the SDK handshake hangs 100% of the time. The server's `initialize` / `notifications/initialized` / protocolVersion handling is already SDK-compatible; framing is the only gap.
+
+- [ ] **Step 1: Update the transport tests first** — rewrite `ReadFromStream` to feed `{"jsonrpc":"2.0","id":1,"method":"ping"}\n` (no headers) and `WriteToStream` to assert the output is the serialized JSON followed by a single `\n` (no `Content-Length:` header). Run `ctest --test-dir build -R Transport --output-on-failure` → FAIL.
+
+- [ ] **Step 2: Implement** — `read_message`: `std::getline(in, line)`, skip empty lines, parse the line as JSON (return `nullopt` on stream EOF; on a malformed line, log at WARN and continue to the next line rather than terminating). `write_message`: write the compact JSON string + `'\n'`, then flush.
+
+- [ ] **Step 3: Verify** — `cmake --build build && ctest --test-dir build --output-on-failure` → all green. Manual smoke:
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./build/tibia-mcp 2>/dev/null | head -c 500
+```
+Expected: one line of JSON listing the tools.
+
+- [ ] **Step 4: Commit** — `feat(mcp): newline-delimited JSON-RPC framing (MCP SDK stdio compatibility)`
 
 ---
 
@@ -460,7 +480,7 @@ export async function connectMcp(command: string, cwd?: string): Promise<McpBrid
 ```bash
 npx tsx -e "import('./src/mcp/mcpClient.js').then(async m => { const b = await m.connectMcp('../../build/tibia-mcp', '../..'); console.log((await b.listTools()).map(t => t.name)); process.exit(0); })"
 ```
-Expected: the 14 tool names. If the C++ server's JSON-RPC framing rejects the SDK's handshake, debug `src/mcp/transport.cpp` framing (newline-delimited vs Content-Length) — the SDK's stdio transport speaks newline-delimited JSON-RPC; adjust the C++ transport if needed (it was built for exactly this protocol, so expect it to work).
+Expected: the 14 tool names. This depends on Task 6.5 (newline-delimited framing) being done — without it the SDK handshake hangs. If it still hangs after 6.5, add `stderr: 'inherit'` to the transport options and read the C++ server's log output to see where the handshake stops.
 
 - [ ] **Step 5: Verify + commit** — `feat(bot): MCP stdio bridge to tibia-mcp`
 
@@ -666,7 +686,7 @@ Also add a per-user per-minute rate cap (in-memory `Map<userId, timestamps[]>`, 
 
 - [ ] **Step 5: `/auction` (test-first)** — options: `vocation` (choices: knight/paladin/sorcerer/druid/monk), `level` (int), `world` (string). Calls `mcp.callTool('valuate_auction', {...})` and replies with its text. This is the flagship deterministic command — the valuation text already carries the cohort/confidence framing.
 
-- [ ] **Step 6: Delete listener-era plumbing** — `git rm` offersCommand + test, marketQueryService + test, marketRepository, priceFormatter + test, offersFormatter + test. Remove `offers` from `registry.ts`, add `char`/`boosted`/`auction` definitions with real executes; `npm run typecheck` will enumerate every dangling import — fix all.
+- [ ] **Step 6: Delete listener-era plumbing** — `git rm` offersCommand + test, marketQueryService + test, marketRepository, priceFormatter + test, offersFormatter + test, and `src/db/schemaFiles.ts` + test (dead once the migration runner owns schema application — only its own test imports it). Remove `offers` from `registry.ts`, add `char`/`boosted`/`auction` definitions with real executes; `npm run typecheck` will enumerate every dangling import — fix all.
 
 - [ ] **Step 7: Verify + commit** — suite/typecheck/lint green → `feat(bot): char/boosted/auction commands, price repointed to NPC values, market plumbing removed`
 
@@ -750,28 +770,26 @@ COPY src ./src
 COPY tests ./tests
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target tibia-mcp -j
 
-# Stage 2: build the bot
-FROM node:22-bookworm-slim AS bot-build
+# Stage 2: install bot dependencies
+FROM node:22-bookworm-slim AS bot-deps
 WORKDIR /bot
 COPY services/discord-bot/package*.json ./
 RUN npm ci
-COPY services/discord-bot ./
-RUN npm run build
 
-# Stage 3: runtime
+# Stage 3: runtime — run TS directly via tsx (matches the dev script)
 FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends libcurl4 libsqlite3-0 ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=cpp-build /src/build/tibia-mcp /app/bin/tibia-mcp
-COPY --from=bot-build /bot/dist /app/dist
-COPY --from=bot-build /bot/node_modules /app/node_modules
-COPY --from=bot-build /bot/package.json /app/package.json
+COPY --from=bot-deps /bot/node_modules /app/node_modules
+COPY services/discord-bot/package.json /app/package.json
+COPY services/discord-bot/src /app/src
 COPY services/discord-bot/db /app/db
 RUN mkdir -p /app/data
 ENV MCP_SERVER_COMMAND=/app/bin/tibia-mcp MCP_SERVER_CWD=/app/data NODE_ENV=production
-CMD ["node", "dist/main.js"]
+CMD ["npx", "tsx", "src/main.ts"]
 ```
-(Adjust `dist/main.js` and the `db/` copy path to match the actual `tsc` outDir — check `tsconfig.json`; the migration loader resolves `../db/migrations` relative to the compiled file, verify that path exists in the image.)
+**Why tsx, not `node dist/`:** the bot's `tsconfig.json` uses `moduleResolution: "Bundler"` with extensionless relative imports; `tsc` emits them as-is and plain Node ESM rejects them (`ERR_MODULE_NOT_FOUND`). Running via `tsx` (already the `dev` script) sidesteps that with zero source churn. `npm ci` installs dev deps so `tsx` is present — image is a bit larger; acceptable for v1. Path check: `main.ts` resolves migrations at `src/../db/migrations` → `/app/db/migrations` ✓.
 
 - [ ] **Step 2: `docker-compose.yml`**:
 

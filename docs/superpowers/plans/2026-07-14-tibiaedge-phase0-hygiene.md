@@ -106,13 +106,13 @@ git rm src/mcp/tools/query_trade_offers.cpp src/mcp/tools/query_trade_offers.h \
        tests/test_list_active_traders.cpp tests/test_trade_store.cpp
 ```
 
-- [ ] **Step 5: Build + count registered tools**
+- [ ] **Step 5: Build the MCP target only + count registered tools**
 
 ```bash
-cmake -S . -B build && cmake --build build 2>&1 | tail -5
+cmake -S . -B build && cmake --build build --target tibia-mcp 2>&1 | tail -5
 grep -c 'register_tool' src/main.cpp
 ```
-Expected: build succeeds; grep prints `12`. (Full ctest still fails until Task 3 removes the remaining listener test entries — that's expected; only confirm `tibia-mcp` compiles.)
+Expected: `tibia-mcp` builds clean; grep prints `12`. Do NOT build the default/all target here — `tibia-mcp-tests` still compiles `tests/test_message_sink.cpp` and `src/listener/message_sink.cpp`, which reference the now-removed `TradeStore` sources and would fail at link until Task 3 deletes them. That is expected and not a defect.
 
 - [ ] **Step 6: Commit**
 
@@ -251,10 +251,13 @@ Expected: configure/build clean, `tibia-mcp-tests` 40/40 pass.
 
 - [ ] **Step 2: Smoke the MCP server binary**
 
+The transport (`src/mcp/transport.cpp:38-62`) uses **Content-Length framing** at this point (Phase 1 switches it to newline-delimited), so frame the message:
+
 ```bash
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./build/tibia-mcp 2>/dev/null | head -c 2000
+BODY='{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+printf 'Content-Length: %d\r\n\r\n%s' "${#BODY}" "$BODY" | ./build/tibia-mcp 2>/dev/null | head -c 2000
 ```
-Expected: JSON response listing exactly 12 tools. (If the transport uses Content-Length framing, pipe the equivalent framed message; check `src/mcp/transport.cpp` for the read format first.)
+Expected: JSON response listing exactly 12 tools.
 
 - [ ] **Step 3: Repo state**
 
