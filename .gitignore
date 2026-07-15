@@ -1,5 +1,11 @@
 build/
-*.db
 *.log
 .cache/
 compile_commands.json
+.env
+.env.local
+.envrc
+*.db
+*.db-shm
+*.db-wal
+node_modules/

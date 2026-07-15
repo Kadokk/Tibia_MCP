@@ -45,14 +45,6 @@ add_executable(tibia-mcp
     src/mcp/tools/search_bazaar.cpp
     src/mcp/tools/lookup_bazaar_auction.cpp
     src/mcp/tools/clear_cache.cpp
-    src/mcp/tools/query_trade_offers.cpp
-    src/mcp/tools/get_price_history.cpp
-    src/mcp/tools/list_active_traders.cpp
-    src/store/trade_store.cpp
-    src/llm/claude_client.cpp
-    src/parser/item_registry.cpp
-    src/parser/regex_parser.cpp
-    src/parser/llm_parser.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
@@ -71,17 +63,6 @@ add_executable(tibia-mcp-tests
     tests/test_tibiadata.cpp
     tests/test_tibiawiki.cpp
     tests/test_bazaar.cpp
-    tests/test_trade_store.cpp
-    tests/test_channel_joiner.cpp
-    tests/test_anti_idle.cpp
-    tests/test_message_sink.cpp
-    tests/test_claude_client.cpp
-    tests/test_item_registry.cpp
-    tests/test_regex_parser.cpp
-    tests/test_llm_parser.cpp
-    tests/test_query_trade_offers.cpp
-    tests/test_get_price_history.cpp
-    tests/test_list_active_traders.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
@@ -89,59 +70,15 @@ add_executable(tibia-mcp-tests
     src/sources/tibiadata.cpp
     src/sources/tibiawiki.cpp
     src/sources/bazaar.cpp
-    src/store/trade_store.cpp
-    src/listener/channel_joiner.cpp
-    src/listener/anti_idle.cpp
-    src/listener/message_sink.cpp
-    src/llm/claude_client.cpp
-    src/parser/item_registry.cpp
-    src/parser/regex_parser.cpp
-    src/parser/llm_parser.cpp
-    src/mcp/tools/query_trade_offers.cpp
-    src/mcp/tools/get_price_history.cpp
-    src/mcp/tools/list_active_traders.cpp
 )
-target_include_directories(tibia-mcp-tests PRIVATE src lib/protocol/src lib/protocol/include)
+target_include_directories(tibia-mcp-tests PRIVATE src)
 target_link_libraries(tibia-mcp-tests PRIVATE
     GTest::gtest_main
     nlohmann_json::nlohmann_json
     SQLite3::SQLite3
     CURL::libcurl
-    tibia-protocol
 )
 target_compile_definitions(tibia-mcp-tests PRIVATE
     FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
 )
 add_test(NAME tibia-mcp-tests COMMAND tibia-mcp-tests)
-
-add_executable(tibia-listener
-    src/listener/main.cpp
-    src/listener/channel_joiner.cpp
-    src/listener/anti_idle.cpp
-    src/listener/message_sink.cpp
-    src/store/trade_store.cpp
-)
-target_include_directories(tibia-listener PRIVATE src lib/protocol/src)
-target_link_libraries(tibia-listener PRIVATE
-    tibia-protocol
-    SQLite3::SQLite3
-    nlohmann_json::nlohmann_json
-)
-
-add_executable(tibia-parser
-    src/parser/main.cpp
-    src/parser/item_registry.cpp
-    src/parser/regex_parser.cpp
-    src/parser/llm_parser.cpp
-    src/llm/claude_client.cpp
-    src/store/trade_store.cpp
-)
-target_include_directories(tibia-parser PRIVATE src)
-target_link_libraries(tibia-parser PRIVATE
-    nlohmann_json::nlohmann_json
-    CURL::libcurl
-    SQLite3::SQLite3
-)
-
-# Protocol library (sub-project 2)
-add_subdirectory(lib/protocol)
