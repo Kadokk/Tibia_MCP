@@ -33,13 +33,15 @@ build's actual verification state.
   Orchestrator, passes cleanly. The daemon itself was never reachable there
   (`docker ps` → "Cannot connect to the Docker daemon"), so the actual image build and
   container bring-up have never run anywhere yet.
-- **Task 14 Step 1 — golden-set eval** (2026-07-15): `cd services/discord-bot &&
-  ANTHROPIC_API_KEY=... npm run eval` was never run to completion in the dev sandbox —
-  no `ANTHROPIC_API_KEY` was provisioned there at all (checked: not in the shell env of
-  either agent pane, no keychain entry, no `.env` file anywhere in the repo). This is a
-  different failure mode than the network/daemon blocks above — it just needs the key.
-  Run it once a key is available and confirm all 12 golden cases pass (cost is printed;
-  expect roughly $0.25 at Haiku prices per the plan).
+- **Task 14 Step 1 — golden-set eval** (2026-07-15, updated 2026-07-15): `cd
+  services/discord-bot && ANTHROPIC_API_KEY=... npm run eval` initially couldn't run at
+  all in the dev sandbox — no key was provisioned there (checked: not in the shell env
+  of either agent pane, no keychain entry, no `.env` file anywhere in the repo). Since
+  then it was attempted with a human-provided key: the harness itself works correctly
+  (connects, builds the fixture bridge, drives all 12 cases), but every case was blocked
+  on insufficient API credit balance — a billing issue, not a harness or prompt-quality
+  problem. Run it once a funded key is available and confirm all 12 golden cases pass
+  (cost is printed; expect roughly $0.25 at Haiku prices per the plan).
 
 ## 2. Task 14 Steps 2–6 (deployment-only drills — need a live bot + real Discord guild)
 
