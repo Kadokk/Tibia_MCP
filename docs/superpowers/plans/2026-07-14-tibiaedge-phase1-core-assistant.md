@@ -601,6 +601,8 @@ Notes for the implementer: all tool results for one assistant turn go back in a 
 
 ### Task 9: `/ask` command, metering, circuit breaker, deferred replies
 
+> **Pinned gotcha (ledger, 2026-07-15, from Task 7):** Node's `child_process.spawn` (used by the MCP SDK's `StdioClientTransport`) resolves a *relative* command path against the **child's** `cwd`, not the parent process's cwd — `connectMcp(command, cwd)` faithfully passes both through, so a caller must keep them mutually consistent. When wiring `connectMcp()` in `main.ts` for real (this task's dependency construction), pass an **absolute** path for `command` (e.g. derived via `path.resolve`/`import.meta.url`, same pattern `main.ts` already uses for migrations) or a path resolvable from whatever `cwd` you pass — don't copy a bare relative path like `build/tibia-mcp` without checking it resolves from the chosen cwd.
+
 **Files:**
 - Create: `services/discord-bot/src/commands/askCommand.ts`
 - Modify: `services/discord-bot/src/commands/types.ts` (allow `execute` to return `null` = "already replied")
@@ -691,6 +693,10 @@ Also add a per-user per-minute rate cap (in-memory `Map<userId, timestamps[]>`, 
 - [ ] **Step 6: Delete listener-era plumbing** — `git rm` offersCommand + test, marketQueryService + test, marketRepository, priceFormatter + test, offersFormatter + test, and `src/db/schemaFiles.ts` + test (dead once the migration runner owns schema application — only its own test imports it). Remove `offers` from `registry.ts`, add `char`/`boosted`/`auction` definitions with real executes; `npm run typecheck` will enumerate every dangling import — fix all.
 
 - [ ] **Step 7: Verify + commit** — suite/typecheck/lint green → `feat(bot): char/boosted/auction commands, price repointed to NPC values, market plumbing removed`
+
+> **Follow-up tickets (owned debt, not gating any task, ledger 2026-07-15):**
+> - `/price`'s `commandsUsedToday` is hardcoded to `0` in `registry.ts` (no per-command daily-usage counter repository exists yet, unlike `aiQuestionsToday` for `/ask`). `access.canUseCommand`'s gate still runs and is structurally ready for a real counter. File a ticket: build a command-usage counter repository before `/price`'s daily cap needs to be real.
+> - No `.dockerignore` at the repo root (Task 13, 2026-07-15): the Docker build context includes `build/`, `node_modules/`, and `*.db` files — inefficient (larger context upload, slower builds) but not incorrect, since the `Dockerfile`'s `COPY` instructions are all explicit path allowlists. Out of Task 13's declared file scope (the plan's Dockerfile snippet doesn't reference one). File a ticket to add one.
 
 ---
 
@@ -823,6 +829,11 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 
 - [ ] **Step 3: Local smoke** — `docker compose build && docker compose up -d && docker compose logs -f bot` with a real `.env` (test-guild Discord token). Expected log order: migrations applied → commands registered → "TibiaEdge Discord bot ready". Then in the test guild run `/boosted` and `/ask what is a dragon?` end-to-end.
 
+> **Live-verify backlog (sandbox-blocked spot-checks):** the dev sandbox's outbound curl hits a Cloudflare "Just a moment..." challenge on both `tibia.fandom.com` and `www.tibia.com`, so live spot-checks for scraper-dependent features can't run there — each is unit/fixture-verified only until confirmed from an unblocked environment (a real deploy target, e.g. during Task 13 Step 3's compose smoke or a VPS). Grow this list as they accrue:
+> - Task 4 (2026-07-15): wiki NPC prices — `search_item` should include `Buy From`/`Sell To` lines on a live query (e.g. "magic plate armor"). Parser logic unit-verified (41/41 tests); live fetch untested.
+> - Task 5 (2026-07-15): ended-auction scraping — `refresh_bazaar_history` should fetch and store real past-auction records from `tibia.com`'s past-trades pages. Parser/store logic unit-verified via hand-crafted fixture + fetch-seam (48/48 tests); live fetch untested (same Cloudflare block).
+> - Task 13 (2026-07-15): full `docker compose build && docker compose up -d` bring-up plus the end-to-end `/boosted` and `/ask` smoke test (Step 3 above) is deployment-only — the dev sandbox has no reachable Docker daemon (`docker ps` → "Cannot connect to the Docker daemon"), so only `docker compose config` (YAML parse + `${POSTGRES_PASSWORD}` interpolation) was verifiable here. Confirm the image build, stack bring-up, and `/boosted`/`/ask` smoke test on a real VPS/deploy target.
+
 - [ ] **Step 4: `docs/deploy.md`** — short runbook: VPS requirements (~1 vCPU / 1GB / $8), install docker+compose, clone, create `.env` (list every var from `.env.example` with one-line explanations), `docker compose up -d`, update procedure (`git pull && docker compose build && docker compose up -d`), backup note (pg-data volume + `pg_dump` cron one-liner), and the spend-cap knob (`AI_DAILY_SPEND_CAP_USD`).
 
 - [ ] **Step 5: Commit** — `feat(deploy): docker image, compose stack, deploy runbook`
@@ -831,8 +842,11 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 
 ### Task 14: Private-beta checklist + final verification
 
+> **Owned cleanup (ledger, 2026-07-15):** `README.md` line 59 still reads `ctest --test-dir build # runs tibia-mcp-tests (40 tests)` — stale since Task 5/6 raised the count to 52 (and will rise further by the time this task runs). Fix it as part of Step 1 below: after the final verification battery, update the README's test-count mention to match the actual final count.
+> **Owned cleanup (ledger, 2026-07-15, added during Task 6.5):** `tests/test_integration.sh` line 37 prints a hardcoded `"PASS: all 12 tools registered"` message even though the actual threshold check (`-ge 12`) and tool count (14 after Task 6) have moved on — cosmetic only, the assertion still functionally passes. Fix alongside the README count in this task's Step 1: make the message reference `$TOOL_COUNT` (or the current literal count) instead of a stale hardcoded "12".
+
 - [ ] **Step 1: Full verification battery**
-  - C++: `rm -rf build && cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure` → green (40 + new bazaar/valuation tests).
+  - C++: `rm -rf build && cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure` → green (40 + new bazaar/valuation tests). After this passes, also correct README.md's stale `(40 tests)` mention (line 59 as of this writing) to the actual final count.
   - Bot: `npx vitest run && npm run typecheck && npm run lint` → green.
   - Eval: `npm run eval` → all pass, cost printed.
   - Compose stack up; `/ask`, `/price`, `/auction`, `/char`, `/boosted` each answered correctly in the test guild.
@@ -841,3 +855,9 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 - [ ] **Step 4: Cache check** — after 2+ questions, log `usage.cache_read_input_tokens` from the agent loop (temporary debug log) — record whether the 4096-token Haiku cache floor is being met; note the finding in `docs/deploy.md`.
 - [ ] **Step 5: Beta rollout** — invite the bot to 2–3 friendly Discord servers (registerCommands global or per-guild as appropriate); pin a short "how to use TibiaEdge" message; create a feedback channel. Track for one week: DAU, questions/day, spend/day, top failure answers.
 - [ ] **Step 6: Tag** — `git tag v0.2.0-beta && git log --oneline -20` summary in the final report.
+
+> **Live-verify backlog (sandbox-blocked spot-checks, carried from Task 13):** confirm each from an unblocked environment before declaring beta-ready — the dev sandbox itself cannot reach these live (Cloudflare-blocked). Grow this list as they accrue:
+> - Task 4 (2026-07-15): wiki NPC prices — `search_item` should include `Buy From`/`Sell To` lines on a live query. Parser logic unit-verified (41/41 tests); live fetch untested in sandbox.
+> - Task 5 (2026-07-15): ended-auction scraping — `refresh_bazaar_history` should fetch and store real past-auction records. Parser/store logic unit-verified (48/48 tests); live fetch untested in sandbox (same Cloudflare block).
+> - Task 8 (2026-07-15): Haiku 4.5 prompt caching — the 4096-token minimum cacheable prefix can't be exercised with fake Anthropic clients; agent loop logic unit-verified (76/76 tests, cache_control placement confirmed on system + last tool). Deployment-only check: on a real `/ask`, confirm `usage.cache_read_input_tokens > 0` on the second question (this is also covered by Task 14's own Step 4 "Cache check" — cross-referenced here so it isn't missed among the other backlog items).
+> - Task 13 (2026-07-15): full `docker compose build && docker compose up -d` bring-up plus the end-to-end `/boosted` and `/ask` smoke test (Task 13 Step 3) is deployment-only — the dev sandbox has no reachable Docker daemon (`docker ps` → "Cannot connect to the Docker daemon"), so only `docker compose config` (YAML parse + `${POSTGRES_PASSWORD}` interpolation, re-verified firsthand by the Orchestrator) was checkable here. Confirm the image build, stack bring-up, and `/boosted`/`/ask` smoke test on a real VPS/deploy target — this is Task 14 Step 1's own "Compose stack up" bullet.

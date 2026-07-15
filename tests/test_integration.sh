@@ -15,10 +15,10 @@ run_with_timeout() {
     fi
 }
 
-# Helper: send a JSON-RPC message with Content-Length header
+# Helper: send a JSON-RPC message as a newline-delimited line (MCP SDK stdio framing)
 send() {
     local body="$1"
-    printf "Content-Length: %d\r\n\r\n%s" "${#body}" "$body"
+    printf '%s\n' "$body"
 }
 
 # Test 1: initialize + tools/list
@@ -32,9 +32,9 @@ RESPONSE=$(
 )
 
 echo "$RESPONSE" | grep -q '"tools"' && echo "PASS: tools/list returned tools" || echo "FAIL: tools/list"
-TOOL_COUNT=$(echo "$RESPONSE" | grep -o '"name"' | wc -l)
+TOOL_COUNT=$(echo "$RESPONSE" | grep -o '"inputSchema"' | wc -l)
 echo "Tools found: $TOOL_COUNT"
-[ "$TOOL_COUNT" -ge 12 ] && echo "PASS: all 12 tools registered" || echo "FAIL: expected 12 tools"
+[ "$TOOL_COUNT" -ge 12 ] && echo "PASS: all $TOOL_COUNT tools registered" || echo "FAIL: expected at least 12 tools, found $TOOL_COUNT"
 
 # Test 2: ping
 echo "--- Test 2: ping ---"

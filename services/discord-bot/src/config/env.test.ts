@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { parseEnv } from './env';
 
 describe('parseEnv', () => {
-  it('parses required Discord and database config', () => {
+  it('parses required Discord, database, and Phase 1 config', () => {
     const env = parseEnv({
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
+      ANTHROPIC_API_KEY: 'sk-ant-test',
+      MCP_SERVER_COMMAND: '/app/bin/tibia-mcp',
       NODE_ENV: 'test'
     });
 
@@ -14,6 +16,23 @@ describe('parseEnv', () => {
     expect(env.discordClientId).toBe('123456789012345678');
     expect(env.databaseUrl).toContain('postgres://');
     expect(env.nodeEnv).toBe('test');
+    expect(env.anthropicApiKey).toBe('sk-ant-test');
+    expect(env.mcpServerCommand).toBe('/app/bin/tibia-mcp');
+  });
+
+  it('applies Phase 1 defaults and leaves optional MCP cwd unset', () => {
+    const env = parseEnv({
+      DISCORD_TOKEN: 'token',
+      DISCORD_CLIENT_ID: '123456789012345678',
+      DATABASE_URL: 'postgres://user:password@localhost:5432/db',
+      ANTHROPIC_API_KEY: 'sk-ant-test',
+      MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
+    });
+
+    expect(env.anthropicModel).toBe('claude-haiku-4-5');
+    expect(env.aiDailySpendCapUsd).toBe(0.7);
+    expect(env.tibiaDataBaseUrl).toBe('https://api.tibiadata.com');
+    expect(env.mcpServerCwd).toBeUndefined();
   });
 
   it('rejects missing required values', () => {

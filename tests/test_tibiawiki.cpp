@@ -24,6 +24,14 @@ TEST(TibiaWikiTest, ParseItem) {
                 result.find("armor") != std::string::npos);
 }
 
+TEST(TibiaWikiTest, ParseItemExtractsNpcPrices) {
+    auto html = read_fixture("tibiawiki/item_magic_plate_armor.html");
+    auto result = TibiaWiki::parse_item(html);
+    EXPECT_TRUE(result.find("Sell To:") != std::string::npos) << result;
+    // At least one NPC name + gold value from the fixture rows:
+    EXPECT_TRUE(result.find("gp") != std::string::npos || result.find("gold") != std::string::npos) << result;
+}
+
 TEST(TibiaWikiTest, ParseCreature) {
     auto html = read_fixture("tibiawiki/creature_demon.html");
     auto result = TibiaWiki::parse_creature(html);

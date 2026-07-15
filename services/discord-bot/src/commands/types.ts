@@ -16,7 +16,9 @@ export type CommandData = {
 
 export type BotCommand = {
   data: CommandData;
-  execute(context: CommandContext): Promise<CommandResponse>;
+  // Returning null means the command already replied to the interaction itself
+  // (e.g. a deferred reply), so the dispatcher must not reply again.
+  execute(context: CommandContext): Promise<CommandResponse | null>;
 };
 
 export function createTextResponse(content: string, ephemeral = false): CommandResponse {

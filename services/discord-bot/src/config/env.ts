@@ -7,7 +7,13 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: snowflakeSchema,
   DISCORD_GUILD_ID: snowflakeSchema.optional(),
   DATABASE_URL: z.string().trim().url(),
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development')
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  ANTHROPIC_API_KEY: z.string().trim().min(1),
+  ANTHROPIC_MODEL: z.string().trim().default('claude-haiku-4-5'),
+  MCP_SERVER_COMMAND: z.string().trim().min(1),          // path to tibia-mcp binary
+  MCP_SERVER_CWD: z.string().trim().optional(),          // where its sqlite cache lives
+  AI_DAILY_SPEND_CAP_USD: z.coerce.number().positive().default(0.7),
+  TIBIADATA_BASE_URL: z.string().trim().url().default('https://api.tibiadata.com')
 });
 
 export type AppEnv = {
@@ -16,6 +22,12 @@ export type AppEnv = {
   discordGuildId?: string;
   databaseUrl: string;
   nodeEnv: 'development' | 'test' | 'production';
+  anthropicApiKey: string;
+  anthropicModel: string;
+  mcpServerCommand: string;
+  mcpServerCwd?: string;
+  aiDailySpendCapUsd: number;
+  tibiaDataBaseUrl: string;
 };
 
 export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
@@ -25,6 +37,12 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     discordClientId: parsed.DISCORD_CLIENT_ID,
     discordGuildId: parsed.DISCORD_GUILD_ID,
     databaseUrl: parsed.DATABASE_URL,
-    nodeEnv: parsed.NODE_ENV
+    nodeEnv: parsed.NODE_ENV,
+    anthropicApiKey: parsed.ANTHROPIC_API_KEY,
+    anthropicModel: parsed.ANTHROPIC_MODEL,
+    mcpServerCommand: parsed.MCP_SERVER_COMMAND,
+    mcpServerCwd: parsed.MCP_SERVER_CWD,
+    aiDailySpendCapUsd: parsed.AI_DAILY_SPEND_CAP_USD,
+    tibiaDataBaseUrl: parsed.TIBIADATA_BASE_URL
   };
 }

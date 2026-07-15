@@ -1,0 +1,8 @@
+{
+  "_note": "Replayed MCP tool outputs for the golden eval. Keyed by tool name (each golden question exercises one tool domain, so args-independent lookup is sufficient for the seed set). _default backs any unmatched call. Text mirrors the real tools' output shapes; capture fresh outputs from the built binary before growing this set.",
+  "valuate_auction": "## Auction valuation: knight, level 250, Antica (Open PvP)\n- Cohort: 42 ended auctions, level 212-288, last 30 days\n- Median winning bid: 2,850 TC\n- Interquartile range: 2,100-3,600 TC\n- Confidence: medium (42 comparable sales)\nA bid near 2,850 TC is a strong candidate; 3,600 TC and above would need manual review of skills, gear, and imbuements.",
+  "search_creature": "**Dragon**\n- Hitpoints: 1,000\n- Experience: 700\n- Speed: 86\n- Immune to: fire\n- Weak to: ice (+10%), energy (+5%)\n- Notable loot: dragon ham, dragon scale mail, dragon shield, small diamond\nHabitat: dragon lairs across Thais, Kazordoon, and the Plains of Havoc.",
+  "search_wiki": "**Dragon** — one of the classic Tibian creatures.\nA dragon has about 1,000 hitpoints and yields roughly 700 experience. It attacks with fire breath and melee, is immune to fire, and is weak to ice and energy. Commonly hunted by mid-level players for dragon leather and the rare dragon scale mail.",
+  "search_item": "**Magic Plate Armor**\n- NPC Buy From: not sold by NPCs\n- NPC Sell To: 15,000 gp (Djinn, various)\n- Armor: 17, Weight: 120.00 oz",
+  "_default": "No matching data was found for that query."
+}
