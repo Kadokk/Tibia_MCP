@@ -836,6 +836,7 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 ### Task 14: Private-beta checklist + final verification
 
 > **Owned cleanup (ledger, 2026-07-15):** `README.md` line 59 still reads `ctest --test-dir build # runs tibia-mcp-tests (40 tests)` — stale since Task 5/6 raised the count to 52 (and will rise further by the time this task runs). Fix it as part of Step 1 below: after the final verification battery, update the README's test-count mention to match the actual final count.
+> **Owned cleanup (ledger, 2026-07-15, added during Task 6.5):** `tests/test_integration.sh` line 37 prints a hardcoded `"PASS: all 12 tools registered"` message even though the actual threshold check (`-ge 12`) and tool count (14 after Task 6) have moved on — cosmetic only, the assertion still functionally passes. Fix alongside the README count in this task's Step 1: make the message reference `$TOOL_COUNT` (or the current literal count) instead of a stale hardcoded "12".
 
 - [ ] **Step 1: Full verification battery**
   - C++: `rm -rf build && cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure` → green (40 + new bazaar/valuation tests). After this passes, also correct README.md's stale `(40 tests)` mention (line 59 as of this writing) to the actual final count.
