@@ -694,6 +694,9 @@ Also add a per-user per-minute rate cap (in-memory `Map<userId, timestamps[]>`, 
 
 - [ ] **Step 7: Verify + commit** — suite/typecheck/lint green → `feat(bot): char/boosted/auction commands, price repointed to NPC values, market plumbing removed`
 
+> **Follow-up tickets (owned debt, not gating any task, ledger 2026-07-15):**
+> - `/price`'s `commandsUsedToday` is hardcoded to `0` in `registry.ts` (no per-command daily-usage counter repository exists yet, unlike `aiQuestionsToday` for `/ask`). `access.canUseCommand`'s gate still runs and is structurally ready for a real counter. File a ticket: build a command-usage counter repository before `/price`'s daily cap needs to be real.
+
 ---
 
 ### Task 11: Bazaar refresh scheduler
