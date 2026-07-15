@@ -9,6 +9,7 @@ import { createDbClient } from './db/client';
 import { loadMigrations, runMigrations } from './db/migrationRunner';
 import { runAsk, toAnthropicTools } from './agent/agentLoop';
 import { connectMcp } from './mcp/mcpClient';
+import { startRefreshScheduler } from './scheduler/refreshScheduler';
 import { createTibiaDataClient } from './sources/tibiaDataClient';
 import { AccessLimitsService } from './services/accessLimits';
 import { UsageRepository } from './repositories/usageRepository';
@@ -30,6 +31,10 @@ if (applied.length) console.log(`Applied migrations: ${applied.join(', ')}`);
 const mcpCommand = resolve(repoRoot, env.mcpServerCommand);
 const mcpCwd = resolve(repoRoot, env.mcpServerCwd ?? '.');
 const mcp = await connectMcp(mcpCommand, mcpCwd);
+
+// Keep the bazaar-history cache warm: refresh once on start, then hourly.
+// A failed scrape is logged and swallowed, never crashing the bot.
+startRefreshScheduler(mcp, { intervalMs: 3_600_000 });
 
 // Fetch the tool list once at startup: it is stable, so reusing it keeps the
 // Anthropic prompt-cache prefix (system + tools) identical across questions.
