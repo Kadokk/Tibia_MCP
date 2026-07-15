@@ -137,6 +137,8 @@ grep -rln 'trade_store\|tibia/client\|listener/' src/mcp src/sources src/cache s
 ```
 Expected: no output from either (only parser/listener files reference these). If there IS output, stop and reassess before deleting.
 
+> **Ledger — 2026-07-14, Task 3 Step 1 adjudication (Brain, confirmed by Orchestrator):** the first grep returned one hit — `tests/test_item_registry.cpp:38: EXPECT_FALSE(reg.load("/nonexistent/items.json"));`, a string literal in a negative-path test assertion, not a real dependency on `data/items.json`. That exact file is already in this task's own Step 2 `git rm` list (line 129), so the reference is deleted in this same step. The second grep was clean. Guard intent holds (no surviving code depends on the doomed pipeline); the "no output" expectation was over-strict, not a real conflict. Coder unblocked to proceed with Steps 2–6 as written.
+
 - [ ] **Step 2: Delete tracked files**
 
 ```bash
