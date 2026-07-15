@@ -338,7 +338,7 @@ public:
     void close();
     int upsert_auctions(const std::vector<Bazaar::AuctionRecord>& records); // returns rows written
     struct CohortQuery { std::string vocation; int min_level; int max_level; std::vector<std::string> worlds; int days = 30; };
-    struct CohortResult { long long median_bid = 0; long long min_bid = 0; long long max_bid = 0; int count = 0; };
+    struct CohortResult { long long median_bid = 0; long long min_bid = 0; long long max_bid = 0; int count = 0; long long newest_fetched_at = 0; /* unix secs; feeds valuate_auction's data-age line (Task 6) */ };
     CohortResult cohort_stats(const CohortQuery& q);
 };
 ```
@@ -407,6 +407,8 @@ Spec definition: reference value = median winning bid of ended auctions with sam
 - [ ] **Step 1: Update the transport tests first** — rewrite `ReadFromStream` to feed `{"jsonrpc":"2.0","id":1,"method":"ping"}\n` (no headers) and `WriteToStream` to assert the output is the serialized JSON followed by a single `\n` (no `Content-Length:` header). Run `ctest --test-dir build -R Transport --output-on-failure` → FAIL.
 
 - [ ] **Step 2: Implement** — `read_message`: `std::getline(in, line)`, skip empty lines, parse the line as JSON (return `nullopt` on stream EOF; on a malformed line, log at WARN and continue to the next line rather than terminating). `write_message`: write the compact JSON string + `'\n'`, then flush.
+
+- [ ] **Step 2b: Update `tests/test_integration.sh`** — its `send()` helper writes Content-Length frames; switch it to newline-delimited (`printf '%s\n' "$BODY"`) so the script keeps working.
 
 - [ ] **Step 3: Verify** — `cmake --build build && ctest --test-dir build --output-on-failure` → all green. Manual smoke:
 

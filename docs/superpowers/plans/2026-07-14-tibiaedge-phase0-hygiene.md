@@ -232,6 +232,8 @@ Expected: no output (or only lines explicitly describing the archive).
 
 - [ ] **Step 3: Root `package.json`** — confirm the `description` and `scripts` don't reference deleted paths (`probe:login` uses `tools/tibia_login.js`, which stays — it's a Playwright helper, not the packet listener). Update the description if it mentions the listener.
 
+- [ ] **Step 3b: `tests/test_integration.sh`** — this script is not registered in CMake but checks `[ "$TOOL_COUNT" -ge 15 ]`; change the threshold to `12` (and any "15 tools" wording) so it passes against the post-archive server. (Phase 1 Task 6.5 later updates its Content-Length framing.)
+
 - [ ] **Step 4: Commit**
 
 ```bash
