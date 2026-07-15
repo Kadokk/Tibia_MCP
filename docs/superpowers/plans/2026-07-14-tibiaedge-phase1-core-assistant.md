@@ -601,6 +601,8 @@ Notes for the implementer: all tool results for one assistant turn go back in a 
 
 ### Task 9: `/ask` command, metering, circuit breaker, deferred replies
 
+> **Pinned gotcha (ledger, 2026-07-15, from Task 7):** Node's `child_process.spawn` (used by the MCP SDK's `StdioClientTransport`) resolves a *relative* command path against the **child's** `cwd`, not the parent process's cwd — `connectMcp(command, cwd)` faithfully passes both through, so a caller must keep them mutually consistent. When wiring `connectMcp()` in `main.ts` for real (this task's dependency construction), pass an **absolute** path for `command` (e.g. derived via `path.resolve`/`import.meta.url`, same pattern `main.ts` already uses for migrations) or a path resolvable from whatever `cwd` you pass — don't copy a bare relative path like `build/tibia-mcp` without checking it resolves from the chosen cwd.
+
 **Files:**
 - Create: `services/discord-bot/src/commands/askCommand.ts`
 - Modify: `services/discord-bot/src/commands/types.ts` (allow `execute` to return `null` = "already replied")
