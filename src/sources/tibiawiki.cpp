@@ -169,6 +169,15 @@ std::string parse_item(const std::string& html) {
         }
     }
 
+    // NPC trade prices (may contain links)
+    for (const char* key : {"Buy From", "Sell To"}) {
+        auto it = infobox.find(key);
+        if (it != infobox.end()) {
+            std::string v = trim(strip_tags(it->second));
+            if (!v.empty() && v != "--") output += std::string("- ") + key + ": " + v + "\n";
+        }
+    }
+
     return output;
 }
 
