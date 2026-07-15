@@ -45,14 +45,6 @@ add_executable(tibia-mcp
     src/mcp/tools/search_bazaar.cpp
     src/mcp/tools/lookup_bazaar_auction.cpp
     src/mcp/tools/clear_cache.cpp
-    src/mcp/tools/query_trade_offers.cpp
-    src/mcp/tools/get_price_history.cpp
-    src/mcp/tools/list_active_traders.cpp
-    src/store/trade_store.cpp
-    src/llm/claude_client.cpp
-    src/parser/item_registry.cpp
-    src/parser/regex_parser.cpp
-    src/parser/llm_parser.cpp
 )
 
 target_include_directories(tibia-mcp PRIVATE src)
@@ -71,7 +63,6 @@ add_executable(tibia-mcp-tests
     tests/test_tibiadata.cpp
     tests/test_tibiawiki.cpp
     tests/test_bazaar.cpp
-    tests/test_trade_store.cpp
     tests/test_channel_joiner.cpp
     tests/test_anti_idle.cpp
     tests/test_message_sink.cpp
@@ -79,9 +70,6 @@ add_executable(tibia-mcp-tests
     tests/test_item_registry.cpp
     tests/test_regex_parser.cpp
     tests/test_llm_parser.cpp
-    tests/test_query_trade_offers.cpp
-    tests/test_get_price_history.cpp
-    tests/test_list_active_traders.cpp
     src/cache/cache.cpp
     src/http/client.cpp
     src/mcp/transport.cpp
@@ -89,7 +77,6 @@ add_executable(tibia-mcp-tests
     src/sources/tibiadata.cpp
     src/sources/tibiawiki.cpp
     src/sources/bazaar.cpp
-    src/store/trade_store.cpp
     src/listener/channel_joiner.cpp
     src/listener/anti_idle.cpp
     src/listener/message_sink.cpp
@@ -97,9 +84,6 @@ add_executable(tibia-mcp-tests
     src/parser/item_registry.cpp
     src/parser/regex_parser.cpp
     src/parser/llm_parser.cpp
-    src/mcp/tools/query_trade_offers.cpp
-    src/mcp/tools/get_price_history.cpp
-    src/mcp/tools/list_active_traders.cpp
 )
 target_include_directories(tibia-mcp-tests PRIVATE src lib/protocol/src lib/protocol/include)
 target_link_libraries(tibia-mcp-tests PRIVATE
