@@ -835,8 +835,10 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 
 ### Task 14: Private-beta checklist + final verification
 
+> **Owned cleanup (ledger, 2026-07-15):** `README.md` line 59 still reads `ctest --test-dir build # runs tibia-mcp-tests (40 tests)` — stale since Task 5/6 raised the count to 52 (and will rise further by the time this task runs). Fix it as part of Step 1 below: after the final verification battery, update the README's test-count mention to match the actual final count.
+
 - [ ] **Step 1: Full verification battery**
-  - C++: `rm -rf build && cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure` → green (40 + new bazaar/valuation tests).
+  - C++: `rm -rf build && cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure` → green (40 + new bazaar/valuation tests). After this passes, also correct README.md's stale `(40 tests)` mention (line 59 as of this writing) to the actual final count.
   - Bot: `npx vitest run && npm run typecheck && npm run lint` → green.
   - Eval: `npm run eval` → all pass, cost printed.
   - Compose stack up; `/ask`, `/price`, `/auction`, `/char`, `/boosted` each answered correctly in the test guild.
