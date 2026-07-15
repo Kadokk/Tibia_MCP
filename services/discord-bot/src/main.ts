@@ -40,7 +40,11 @@ startRefreshScheduler(mcp, { intervalMs: 3_600_000 });
 // Anthropic prompt-cache prefix (system + tools) identical across questions.
 const tools = toAnthropicTools(await mcp.listTools());
 
-const anthropic = new Anthropic({ apiKey: env.anthropicApiKey });
+// Bound production requests: the SDK default is a 10-min timeout retried twice (~30 min),
+// which would blow past Discord's 15-min editReply window. A timed-out messages.create
+// rejects and ends the agent loop (retries can't stack across rounds, so worst case stays
+// well inside the window); the rejection surfaces via runAsk to askCommand's friendly catch.
+const anthropic = new Anthropic({ apiKey: env.anthropicApiKey, timeout: 60_000, maxRetries: 2 });
 const tibiaData = createTibiaDataClient({ baseUrl: env.tibiaDataBaseUrl });
 const access = new AccessLimitsService();
 const usage = new UsageRepository(db);
