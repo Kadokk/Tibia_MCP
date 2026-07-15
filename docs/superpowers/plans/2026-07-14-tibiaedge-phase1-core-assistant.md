@@ -696,6 +696,7 @@ Also add a per-user per-minute rate cap (in-memory `Map<userId, timestamps[]>`, 
 
 > **Follow-up tickets (owned debt, not gating any task, ledger 2026-07-15):**
 > - `/price`'s `commandsUsedToday` is hardcoded to `0` in `registry.ts` (no per-command daily-usage counter repository exists yet, unlike `aiQuestionsToday` for `/ask`). `access.canUseCommand`'s gate still runs and is structurally ready for a real counter. File a ticket: build a command-usage counter repository before `/price`'s daily cap needs to be real.
+> - No `.dockerignore` at the repo root (Task 13, 2026-07-15): the Docker build context includes `build/`, `node_modules/`, and `*.db` files — inefficient (larger context upload, slower builds) but not incorrect, since the `Dockerfile`'s `COPY` instructions are all explicit path allowlists. Out of Task 13's declared file scope (the plan's Dockerfile snippet doesn't reference one). File a ticket to add one.
 
 ---
 
@@ -859,3 +860,4 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 > - Task 4 (2026-07-15): wiki NPC prices — `search_item` should include `Buy From`/`Sell To` lines on a live query. Parser logic unit-verified (41/41 tests); live fetch untested in sandbox.
 > - Task 5 (2026-07-15): ended-auction scraping — `refresh_bazaar_history` should fetch and store real past-auction records. Parser/store logic unit-verified (48/48 tests); live fetch untested in sandbox (same Cloudflare block).
 > - Task 8 (2026-07-15): Haiku 4.5 prompt caching — the 4096-token minimum cacheable prefix can't be exercised with fake Anthropic clients; agent loop logic unit-verified (76/76 tests, cache_control placement confirmed on system + last tool). Deployment-only check: on a real `/ask`, confirm `usage.cache_read_input_tokens > 0` on the second question (this is also covered by Task 14's own Step 4 "Cache check" — cross-referenced here so it isn't missed among the other backlog items).
+> - Task 13 (2026-07-15): full `docker compose build && docker compose up -d` bring-up plus the end-to-end `/boosted` and `/ask` smoke test (Task 13 Step 3) is deployment-only — the dev sandbox has no reachable Docker daemon (`docker ps` → "Cannot connect to the Docker daemon"), so only `docker compose config` (YAML parse + `${POSTGRES_PASSWORD}` interpolation, re-verified firsthand by the Orchestrator) was checkable here. Confirm the image build, stack bring-up, and `/boosted`/`/ask` smoke test on a real VPS/deploy target — this is Task 14 Step 1's own "Compose stack up" bullet.
