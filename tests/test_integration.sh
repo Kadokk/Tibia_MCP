@@ -15,10 +15,10 @@ run_with_timeout() {
     fi
 }
 
-# Helper: send a JSON-RPC message with Content-Length header
+# Helper: send a JSON-RPC message as a newline-delimited line (MCP SDK stdio framing)
 send() {
     local body="$1"
-    printf "Content-Length: %d\r\n\r\n%s" "${#body}" "$body"
+    printf '%s\n' "$body"
 }
 
 # Test 1: initialize + tools/list

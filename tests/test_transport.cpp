@@ -41,8 +41,8 @@ TEST(TransportTest, SerializeError) {
 
 TEST(TransportTest, ReadFromStream) {
     std::stringstream ss;
-    std::string body = R"({"jsonrpc":"2.0","id":1,"method":"ping"})";
-    ss << "Content-Length: " << body.size() << "\r\n\r\n" << body;
+    // Newline-delimited JSON-RPC: one JSON object per line, no headers.
+    ss << R"({"jsonrpc":"2.0","id":1,"method":"ping"})" << "\n";
     auto msg = JsonRpc::read_message(ss);
     ASSERT_TRUE(msg.has_value());
     EXPECT_EQ(msg->method, "ping");
@@ -50,7 +50,11 @@ TEST(TransportTest, ReadFromStream) {
 
 TEST(TransportTest, WriteToStream) {
     std::stringstream ss;
-    JsonRpc::write_message(ss, R"({"jsonrpc":"2.0","id":1,"result":{}})");
+    std::string body = R"({"jsonrpc":"2.0","id":1,"result":{}})";
+    JsonRpc::write_message(ss, body);
     std::string output = ss.str();
-    EXPECT_TRUE(output.find("Content-Length:") != std::string::npos);
+    // The serialized JSON followed by exactly one newline — no Content-Length framing.
+    EXPECT_EQ(output, body + "\n");
+    EXPECT_TRUE(output.find("Content-Length:") == std::string::npos);
+    EXPECT_TRUE(output.find("\r\n\r\n") == std::string::npos);
 }

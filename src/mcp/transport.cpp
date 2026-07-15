@@ -36,28 +36,21 @@ std::string serialize_error(int id, int code, const std::string& message) {
 }
 
 std::optional<JsonRpcMessage> read_message(std::istream& in) {
+    // Newline-delimited JSON-RPC: one JSON object per line (MCP SDK stdio framing).
     std::string line;
-    int content_length = 0;
-
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
-        if (line.empty()) break;
-        if (line.rfind("Content-Length: ", 0) == 0) {
-            content_length = std::stoi(line.substr(16));
-        }
+        if (line.empty()) continue; // skip blank lines between messages
+        auto msg = parse(line);
+        if (msg.has_value()) return msg;
+        // Malformed line: log and keep reading rather than terminating the stream.
+        LOG(WARN, "Skipping malformed JSON-RPC line");
     }
-
-    if (content_length == 0) return std::nullopt;
-
-    std::string body(content_length, '\0');
-    in.read(&body[0], content_length);
-    if (in.gcount() != content_length) return std::nullopt;
-
-    return parse(body);
+    return std::nullopt; // stream EOF
 }
 
 void write_message(std::ostream& out, const std::string& body) {
-    out << "Content-Length: " << body.size() << "\r\n\r\n" << body;
+    out << body << '\n';
     out.flush();
 }
 
