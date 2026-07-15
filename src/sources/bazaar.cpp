@@ -1,6 +1,7 @@
 #include "sources/bazaar.h"
 #include <regex>
 #include <vector>
+#include <cctype>
 
 namespace {
 
@@ -220,6 +221,73 @@ std::string parse_auction_detail(const std::string& html) {
     }
 
     return output;
+}
+
+std::string past_auctions_url(int page) {
+    if (page < 1) page = 1;
+    return "https://www.tibia.com/charactertrade/?subtopic=pastcharactertrades&currentpage="
+           + std::to_string(page);
+}
+
+std::vector<AuctionRecord> parse_past_auctions(const std::string& html) {
+    std::vector<AuctionRecord> records;
+    if (html.empty()) return records;
+
+    // Parse the leading integer of a string, ignoring embedded thousands commas
+    // (e.g. "Winning Bid: 1,850 TC" -> 1850, "Level: 100" -> 100).
+    auto leading_number = [](const std::string& s) -> long long {
+        std::string digits;
+        bool started = false;
+        for (char c : s) {
+            if (std::isdigit(static_cast<unsigned char>(c))) { digits += c; started = true; }
+            else if (c == ',') { continue; }
+            else if (started) break;
+        }
+        return digits.empty() ? 0 : std::stoll(digits);
+    };
+
+    // Iterate each character-auction block. The marker's trailing quote keeps it
+    // from matching the sub-divs (class="AuctionCharacterName", etc.). Each block
+    // runs from its marker to the start of the next one (or end of document),
+    // which reliably contains the block's nested fields regardless of depth.
+    const std::string marker = "class=\"Auction\"";
+    size_t pos = html.find(marker);
+    while (pos != std::string::npos) {
+        size_t next = html.find(marker, pos + marker.size());
+        size_t block_end = (next == std::string::npos) ? html.size() : next;
+        std::string block = html.substr(pos, block_end - pos);
+
+        AuctionRecord rec;
+
+        // auction_id from the "...auctionid=<N>" link in the block.
+        auto id_pos = block.find("auctionid=");
+        if (id_pos != std::string::npos) {
+            id_pos += std::string("auctionid=").size();
+            std::string digits;
+            while (id_pos < block.size() &&
+                   std::isdigit(static_cast<unsigned char>(block[id_pos]))) {
+                digits += block[id_pos++];
+            }
+            if (!digits.empty()) rec.auction_id = std::stoll(digits);
+        }
+
+        rec.name     = extract_class_text(block, "AuctionCharacterName");
+        rec.level    = static_cast<int>(leading_number(extract_class_text(block, "AuctionCharacterLevel")));
+        rec.vocation = extract_class_text(block, "AuctionCharacterVocation");
+        rec.world    = extract_class_text(block, "AuctionCharacterWorld");
+        rec.end_date = extract_class_text(block, "ShortAuctionDataEnd");
+
+        // A finished auction shows a "Winning Bid" label; cancelled ones do not.
+        rec.has_winner = block.find("Winning Bid") != std::string::npos;
+        if (rec.has_winner) {
+            rec.winning_bid = leading_number(extract_class_text(block, "ShortAuctionDataBid"));
+        }
+
+        if (!rec.name.empty()) records.push_back(rec);
+        pos = next;
+    }
+
+    return records;
 }
 
 } // namespace Bazaar

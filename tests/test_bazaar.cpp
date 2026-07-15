@@ -42,3 +42,29 @@ TEST(BazaarTest, BuildSearchUrl) {
     EXPECT_TRUE(url.find("knight") != std::string::npos ||
                 url.find("vocation") != std::string::npos);
 }
+
+TEST(BazaarTest, PastAuctionsUrl) {
+    auto url = Bazaar::past_auctions_url(2);
+    EXPECT_TRUE(url.find("pastcharactertrades") != std::string::npos) << url;
+    EXPECT_TRUE(url.find("currentpage=2") != std::string::npos) << url;
+}
+
+TEST(BazaarTest, ParsePastAuctions) {
+    auto html = read_fixture("bazaar/past_auctions.html");
+    auto records = Bazaar::parse_past_auctions(html);
+    ASSERT_GE(records.size(), 2u);
+    EXPECT_GT(records[0].auction_id, 0);
+    EXPECT_FALSE(records[0].name.empty());
+    EXPECT_GT(records[0].level, 0);
+    EXPECT_TRUE(records[0].has_winner);
+    EXPECT_GT(records[0].winning_bid, 0);
+}
+
+TEST(BazaarTest, ParsePastAuctionsMarksCancelledWithoutWinner) {
+    auto html = read_fixture("bazaar/past_auctions.html");
+    auto records = Bazaar::parse_past_auctions(html);
+    ASSERT_EQ(records.size(), 3u);
+    // The third fixture auction is cancelled (no "Winning Bid" label).
+    EXPECT_FALSE(records[2].has_winner);
+    EXPECT_EQ(records[2].winning_bid, 0);
+}

@@ -14,7 +14,9 @@
 #include "mcp/tools/search_wiki.h"
 #include "mcp/tools/search_bazaar.h"
 #include "mcp/tools/lookup_bazaar_auction.h"
+#include "mcp/tools/refresh_bazaar_history.h"
 #include "mcp/tools/clear_cache.h"
+#include "store/bazaar_store.h"
 #include <csignal>
 #include <iostream>
 
@@ -36,6 +38,8 @@ int main() {
     Cache cache("tibia_mcp_cache.db");
     g_cache = &cache;
 
+    BazaarStore bazaar_store("tibia_mcp_cache.db");
+
     McpServer server("tibia-mcp", "0.1.0");
 
     HttpClient http_client;
@@ -51,6 +55,7 @@ int main() {
     server.register_tool(std::make_unique<SearchWikiTool>(http_client, cache));
     server.register_tool(std::make_unique<SearchBazaarTool>(http_client, cache));
     server.register_tool(std::make_unique<LookupBazaarAuctionTool>(http_client, cache));
+    server.register_tool(std::make_unique<RefreshBazaarHistoryTool>(http_client, bazaar_store));
     server.register_tool(std::make_unique<ClearCacheTool>(cache));
 
     while (true) {
