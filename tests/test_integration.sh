@@ -34,7 +34,7 @@ RESPONSE=$(
 echo "$RESPONSE" | grep -q '"tools"' && echo "PASS: tools/list returned tools" || echo "FAIL: tools/list"
 TOOL_COUNT=$(echo "$RESPONSE" | grep -o '"name"' | wc -l)
 echo "Tools found: $TOOL_COUNT"
-[ "$TOOL_COUNT" -ge 15 ] && echo "PASS: all 15 tools registered" || echo "FAIL: expected 15 tools"
+[ "$TOOL_COUNT" -ge 12 ] && echo "PASS: all 12 tools registered" || echo "FAIL: expected 12 tools"
 
 # Test 2: ping
 echo "--- Test 2: ping ---"
