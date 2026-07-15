@@ -9,6 +9,7 @@ import { createDbClient } from './db/client';
 import { loadMigrations, runMigrations } from './db/migrationRunner';
 import { runAsk, toAnthropicTools } from './agent/agentLoop';
 import { connectMcp } from './mcp/mcpClient';
+import { createTibiaDataClient } from './sources/tibiaDataClient';
 import { AccessLimitsService } from './services/accessLimits';
 import { UsageRepository } from './repositories/usageRepository';
 import { UserTierRepository } from './repositories/userTierRepository';
@@ -35,6 +36,7 @@ const mcp = await connectMcp(mcpCommand, mcpCwd);
 const tools = toAnthropicTools(await mcp.listTools());
 
 const anthropic = new Anthropic({ apiKey: env.anthropicApiKey });
+const tibiaData = createTibiaDataClient({ baseUrl: env.tibiaDataBaseUrl });
 const access = new AccessLimitsService();
 const usage = new UsageRepository(db);
 const tiers = new UserTierRepository(db);
@@ -47,7 +49,9 @@ const commands = buildRegistry({
   usage,
   tiers,
   ask,
-  dailySpendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000)
+  dailySpendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000),
+  mcp,
+  tibiaData
 });
 
 await registerCommands({ token: env.discordToken, clientId: env.discordClientId, guildId: env.discordGuildId });
