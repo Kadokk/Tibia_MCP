@@ -33,6 +33,7 @@ build's actual verification state.
   Orchestrator, passes cleanly. The daemon itself was never reachable there
   (`docker ps` → "Cannot connect to the Docker daemon"), so the actual image build and
   container bring-up have never run anywhere yet.
+  **Update (2026-07-15):** `docker compose build` now passes locally end-to-end (after the `fix/cmake-sqlite-target` `SQLite::SQLite3` link-target fix); container bring-up + a live `/boosted`/`/ask` smoke test with a real Discord token is still pending.
 - **Task 14 Step 1 — golden-set eval** (2026-07-15, updated 2026-07-15): `cd
   services/discord-bot && ANTHROPIC_API_KEY=... npm run eval` initially couldn't run at
   all in the dev sandbox — no key was provisioned there (checked: not in the shell env
