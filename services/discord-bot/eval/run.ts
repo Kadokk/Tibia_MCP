@@ -53,6 +53,22 @@ function markerHits(answer: string, markers: string[]): number {
 
 const REFUSAL_MAX_CHARS = 900;
 
+// Hard per-case backstop. On top of the per-request client timeout, this guarantees a
+// stalled or pathological case can never silently eat the whole run: it fails loudly.
+const CASE_TIMEOUT_MS = 60_000;
+
+function withCaseTimeout<T>(work: Promise<T>, ms: number, id: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  work.catch(() => undefined); // swallow a late rejection if the timeout already won the race
+  const guard = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`case "${id}" exceeded ${ms}ms — treated as a hard failure (stalled request?)`)),
+      ms
+    );
+  });
+  return Promise.race([work, guard]).finally(() => clearTimeout(timer));
+}
+
 // --- fixture-backed fake MCP bridge --------------------------------------
 
 function makeFixtureBridge() {
@@ -99,28 +115,48 @@ async function main(): Promise<void> {
   try {
     const realBridge = await connectMcp(mcpCommand, repoRoot);
     tools = toAnthropicTools(await realBridge.listTools());
+    // Schemas fetched — release the tibia-mcp child so it doesn't linger for the whole
+    // run and keep the process alive after the report prints.
+    await realBridge.close();
   } catch (err) {
     console.error(`Could not fetch tool schemas from the MCP binary at ${mcpCommand}. Build it first (cmake --build build --target tibia-mcp).`);
     console.error(String(err));
     process.exit(1);
   }
 
-  const anthropic = new Anthropic();
+  // Bound every request. The SDK default is a 10-minute timeout retried twice (~30 min
+  // worst case) — that unbounded wait is how a stalled completion silently hung the eval.
+  const anthropic = new Anthropic({ timeout: 30_000, maxRetries: 2 });
   const model = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5';
   const fixtureBridge = makeFixtureBridge();
   const results: CaseResult[] = [];
 
-  for (const c of golden.cases) {
+  // Optional debug scoping: CASE_FILTER=en-auction-1,en-knowledge-1 runs just those cases.
+  // Unset → all cases.
+  const filterIds = (process.env.CASE_FILTER ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const cases = filterIds.length ? golden.cases.filter((c) => filterIds.includes(c.id)) : golden.cases;
+  if (filterIds.length) {
+    console.error(`[eval] CASE_FILTER active — running ${cases.length}/${golden.cases.length}: ${cases.map((c) => c.id).join(', ')}`);
+  }
+
+  for (const c of cases) {
     fixtureBridge.reset();
+    const caseStartedAt = Date.now();
+    console.error(`[eval] → ${c.id} …`);
     try {
-      const result = await runAsk({
-        anthropic,
-        mcp: fixtureBridge.bridge,
-        tools,
-        model,
-        question: c.question,
-        askerName: 'EvalRunner'
-      });
+      const result = await withCaseTimeout(
+        runAsk({
+          anthropic,
+          mcp: fixtureBridge.bridge,
+          tools,
+          model,
+          question: c.question,
+          askerName: 'EvalRunner'
+        }),
+        CASE_TIMEOUT_MS,
+        c.id
+      );
+      console.error(`[eval] ✓ ${c.id} in ${Date.now() - caseStartedAt}ms (${result.rounds} rounds)`);
       const answer = result.text;
 
       // (2) language
@@ -150,6 +186,7 @@ async function main(): Promise<void> {
         hardFail
       });
     } catch (err) {
+      console.error(`[eval] ✗ ${c.id} in ${Date.now() - caseStartedAt}ms: ${String(err)}`);
       results.push({
         id: c.id,
         langPass: false,

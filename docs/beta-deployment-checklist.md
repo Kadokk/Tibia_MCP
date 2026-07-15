@@ -38,11 +38,17 @@ build's actual verification state.
   services/discord-bot && ANTHROPIC_API_KEY=... npm run eval` initially couldn't run at
   all in the dev sandbox — no key was provisioned there (checked: not in the shell env
   of either agent pane, no keychain entry, no `.env` file anywhere in the repo). Since
-  then it was attempted with a human-provided key: the harness itself works correctly
-  (connects, builds the fixture bridge, drives all 12 cases), but every case was blocked
-  on insufficient API credit balance — a billing issue, not a harness or prompt-quality
-  problem. Run it once a funded key is available and confirm all 12 golden cases pass
-  (cost is printed; expect roughly $0.25 at Haiku prices per the plan).
+  then, with a funded key, the real cause was found and fixed — it was **not a billing
+  issue** (credits are healthy; a direct API probe answers in ~0.9s). The eval harness was
+  **hanging on the live-completion path**: the Anthropic client was built with no timeout,
+  so a stalled `messages.create()` fell through to the SDK's default 10-minute timeout
+  retried twice (~30 min worst case), with no per-case logging to show which case stalled;
+  the eval also never closed its MCP child, so even an all-pass run hung after printing the
+  report. **Fixed in this commit** (on `fix/cmake-sqlite-target`): a 30s per-request client
+  timeout, a hard 60s per-case timeout that records a stall as a loud FAIL instead of a
+  silent hang, opt-in per-case/per-round logging, and closing the MCP child after the
+  schema fetch. **Verified:** `npm run eval` now completes end-to-end — 12/12 golden cases
+  pass in ~69s for ~$0.07 at Haiku prices. No longer blocking.
 
 ## 2. Task 14 Steps 2–6 (deployment-only drills — need a live bot + real Discord guild)
 
