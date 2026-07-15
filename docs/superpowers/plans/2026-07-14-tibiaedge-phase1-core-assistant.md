@@ -823,6 +823,9 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 
 - [ ] **Step 3: Local smoke** — `docker compose build && docker compose up -d && docker compose logs -f bot` with a real `.env` (test-guild Discord token). Expected log order: migrations applied → commands registered → "TibiaEdge Discord bot ready". Then in the test guild run `/boosted` and `/ask what is a dragon?` end-to-end.
 
+> **Live-verify backlog (sandbox-blocked spot-checks):** the dev sandbox's outbound curl hits a Cloudflare "Just a moment..." challenge on both `tibia.fandom.com` and `www.tibia.com`, so live spot-checks for scraper-dependent features can't run there — each is unit/fixture-verified only until confirmed from an unblocked environment (a real deploy target, e.g. during Task 13 Step 3's compose smoke or a VPS). Grow this list as they accrue:
+> - Task 4 (2026-07-15): wiki NPC prices — `search_item` should include `Buy From`/`Sell To` lines on a live query (e.g. "magic plate armor"). Parser logic unit-verified (41/41 tests); live fetch untested.
+
 - [ ] **Step 4: `docs/deploy.md`** — short runbook: VPS requirements (~1 vCPU / 1GB / $8), install docker+compose, clone, create `.env` (list every var from `.env.example` with one-line explanations), `docker compose up -d`, update procedure (`git pull && docker compose build && docker compose up -d`), backup note (pg-data volume + `pg_dump` cron one-liner), and the spend-cap knob (`AI_DAILY_SPEND_CAP_USD`).
 
 - [ ] **Step 5: Commit** — `feat(deploy): docker image, compose stack, deploy runbook`
@@ -841,3 +844,6 @@ No public HTTP in Phase 1 (Stripe/Caddy arrive in Phase 3) — the bot only make
 - [ ] **Step 4: Cache check** — after 2+ questions, log `usage.cache_read_input_tokens` from the agent loop (temporary debug log) — record whether the 4096-token Haiku cache floor is being met; note the finding in `docs/deploy.md`.
 - [ ] **Step 5: Beta rollout** — invite the bot to 2–3 friendly Discord servers (registerCommands global or per-guild as appropriate); pin a short "how to use TibiaEdge" message; create a feedback channel. Track for one week: DAU, questions/day, spend/day, top failure answers.
 - [ ] **Step 6: Tag** — `git tag v0.2.0-beta && git log --oneline -20` summary in the final report.
+
+> **Live-verify backlog (sandbox-blocked spot-checks, carried from Task 13):** confirm each from an unblocked environment before declaring beta-ready — the dev sandbox itself cannot reach these live (Cloudflare-blocked). Grow this list as they accrue:
+> - Task 4 (2026-07-15): wiki NPC prices — `search_item` should include `Buy From`/`Sell To` lines on a live query. Parser logic unit-verified (41/41 tests); live fetch untested in sandbox.
