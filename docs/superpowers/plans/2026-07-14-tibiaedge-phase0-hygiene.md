@@ -20,7 +20,7 @@
 - Modify: `.gitignore`
 - Untrack: `tibia_mcp_cache.db` (tracked binary DB)
 
-- [ ] **Step 1: Tag current HEAD (captures all listener code before deletion)**
+- [x] **Step 1: Tag current HEAD (captures all listener code before deletion)**
 
 ```bash
 cd /Users/kadokk/AI-Devs/projects/Tibia-MCP
@@ -29,7 +29,7 @@ git tag -l 'archive/*'
 ```
 Expected: `archive/live-listener` printed.
 
-- [ ] **Step 2: Replace `.gitignore` contents**
+- [x] **Step 2: Replace `.gitignore` contents**
 
 The working tree already has an uncommitted edit adding `.env` lines — this step subsumes it. Final content:
 
@@ -47,7 +47,7 @@ compile_commands.json
 node_modules/
 ```
 
-- [ ] **Step 3: Untrack the binary DB (keep the local file)**
+- [x] **Step 3: Untrack the binary DB (keep the local file)**
 
 ```bash
 git rm --cached tibia_mcp_cache.db
@@ -55,7 +55,7 @@ git check-ignore tibia_mcp_cache.db .env
 ```
 Expected: both paths printed (now ignored). If `git rm --cached` errors with "did not match any files", the DB was never tracked — skip and note it.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .gitignore
@@ -72,7 +72,7 @@ git commit -m "chore: ignore env files, databases, node_modules; untrack cache D
 - Delete: `src/mcp/tools/query_trade_offers.{cpp,h}`, `src/mcp/tools/get_price_history.{cpp,h}`, `src/mcp/tools/list_active_traders.{cpp,h}`
 - Delete: `tests/test_query_trade_offers.cpp`, `tests/test_get_price_history.cpp`, `tests/test_list_active_traders.cpp`, `tests/test_trade_store.cpp`
 
-- [ ] **Step 1: Edit `src/main.cpp`** — remove these exact lines:
+- [x] **Step 1: Edit `src/main.cpp`** — remove these exact lines:
   - Lines 18–21: the `#include "store/trade_store.h"` and the three tool includes.
   - Line 43: `TradeStore trade_store("tibia_mcp_cache.db");`
   - Lines 61–63: the three `server.register_tool(...)` calls for `QueryTradeOffersTool`, `GetPriceHistoryTool`, `ListActiveTradersTool`.
@@ -80,7 +80,7 @@ git commit -m "chore: ignore env files, databases, node_modules; untrack cache D
 
   Result: exactly 12 `register_tool` calls remain (lookup_character, lookup_guild, list_online_players, list_worlds, search_item, search_creature, search_spell, search_quest, search_wiki, search_bazaar, lookup_bazaar_auction, clear_cache).
 
-- [ ] **Step 2: Edit `CMakeLists.txt` (tibia-mcp target, lines 27–56)** — delete these source lines from the `add_executable(tibia-mcp ...)` block:
+- [x] **Step 2: Edit `CMakeLists.txt` (tibia-mcp target, lines 27–56)** — delete these source lines from the `add_executable(tibia-mcp ...)` block:
 
 ```
     src/mcp/tools/query_trade_offers.cpp
@@ -94,9 +94,9 @@ git commit -m "chore: ignore env files, databases, node_modules; untrack cache D
 ```
 (`src/llm/*` and `src/parser/*` were compiled into `tibia-mcp` but never referenced by it — `main.cpp` includes none of their headers. Verify with `grep -n 'parser\|llm' src/main.cpp` → no hits.)
 
-- [ ] **Step 3: Edit `CMakeLists.txt` (tests target)** — from `add_executable(tibia-mcp-tests ...)` delete the test files `tests/test_trade_store.cpp`, `tests/test_query_trade_offers.cpp`, `tests/test_get_price_history.cpp`, `tests/test_list_active_traders.cpp` and the sources `src/store/trade_store.cpp`, `src/mcp/tools/query_trade_offers.cpp`, `src/mcp/tools/get_price_history.cpp`, `src/mcp/tools/list_active_traders.cpp`. (Parser/listener test lines are removed in Task 3.)
+- [x] **Step 3: Edit `CMakeLists.txt` (tests target)** — from `add_executable(tibia-mcp-tests ...)` delete the test files `tests/test_trade_store.cpp`, `tests/test_query_trade_offers.cpp`, `tests/test_get_price_history.cpp`, `tests/test_list_active_traders.cpp` and the sources `src/store/trade_store.cpp`, `src/mcp/tools/query_trade_offers.cpp`, `src/mcp/tools/get_price_history.cpp`, `src/mcp/tools/list_active_traders.cpp`. (Parser/listener test lines are removed in Task 3.)
 
-- [ ] **Step 4: Delete the files**
+- [x] **Step 4: Delete the files**
 
 ```bash
 git rm src/mcp/tools/query_trade_offers.cpp src/mcp/tools/query_trade_offers.h \
@@ -106,7 +106,7 @@ git rm src/mcp/tools/query_trade_offers.cpp src/mcp/tools/query_trade_offers.h \
        tests/test_list_active_traders.cpp tests/test_trade_store.cpp
 ```
 
-- [ ] **Step 5: Build the MCP target only + count registered tools**
+- [x] **Step 5: Build the MCP target only + count registered tools**
 
 ```bash
 cmake -S . -B build && cmake --build build --target tibia-mcp 2>&1 | tail -5
@@ -114,7 +114,7 @@ grep -c 'register_tool' src/main.cpp
 ```
 Expected: `tibia-mcp` builds clean; grep prints `12`. Do NOT build the default/all target here — `tibia-mcp-tests` still compiles `tests/test_message_sink.cpp` and `src/listener/message_sink.cpp`, which reference the now-removed `TradeStore` sources and would fail at link until Task 3 deletes them. That is expected and not a defect.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "refactor(mcp): remove listener-fed trade tools (15 -> 12 tools)"
@@ -129,7 +129,7 @@ git add -A && git commit -m "refactor(mcp): remove listener-fed trade tools (15 
 - Delete: `tests/test_channel_joiner.cpp`, `tests/test_anti_idle.cpp`, `tests/test_message_sink.cpp`, `tests/test_claude_client.cpp`, `tests/test_item_registry.cpp`, `tests/test_regex_parser.cpp`, `tests/test_llm_parser.cpp`
 - Modify: `CMakeLists.txt` (remove `tibia-listener` target lines 117–129, `tibia-parser` target lines 131–144, `add_subdirectory(lib/protocol)` lines 146–147, remaining test entries, include dirs line 104, link line 110)
 
-- [ ] **Step 1: Confirm nothing else depends on the doomed code**
+- [x] **Step 1: Confirm nothing else depends on the doomed code**
 
 ```bash
 grep -rn 'items.json' src/ tests/ CMakeLists.txt | grep -v 'src/parser'
@@ -139,7 +139,7 @@ Expected: no output from either (only parser/listener files reference these). If
 
 > **Ledger — 2026-07-14, Task 3 Step 1 adjudication (Brain, confirmed by Orchestrator):** the first grep returned one hit — `tests/test_item_registry.cpp:38: EXPECT_FALSE(reg.load("/nonexistent/items.json"));`, a string literal in a negative-path test assertion, not a real dependency on `data/items.json`. That exact file is already in this task's own Step 2 `git rm` list (line 129), so the reference is deleted in this same step. The second grep was clean. Guard intent holds (no surviving code depends on the doomed pipeline); the "no output" expectation was over-strict, not a real conflict. Coder unblocked to proceed with Steps 2–6 as written.
 
-- [ ] **Step 2: Delete tracked files**
+- [x] **Step 2: Delete tracked files**
 
 ```bash
 git rm -r src/listener src/parser src/store src/llm lib/protocol data/items.json \
@@ -150,26 +150,26 @@ git rm -r src/listener src/parser src/store src/llm lib/protocol data/items.json
 ```
 If `docs/listener-smoke-test.md` or `data/items.json` paths differ, locate with `git ls-files | grep -i 'listener\|items.json'` and remove what exists.
 
-- [ ] **Step 3: Delete untracked leftovers**
+- [x] **Step 3: Delete untracked leftovers**
 
 ```bash
 rm -f listener.log tests/fixtures/items_test.json tests/fixtures/items_regex_test.json tests/fixtures/items_llm_test.json
 ```
 
-- [ ] **Step 4: Edit `CMakeLists.txt`**
+- [x] **Step 4: Edit `CMakeLists.txt`**
   - From `add_executable(tibia-mcp-tests ...)`: delete `tests/test_channel_joiner.cpp`, `tests/test_anti_idle.cpp`, `tests/test_message_sink.cpp`, `tests/test_claude_client.cpp`, `tests/test_item_registry.cpp`, `tests/test_regex_parser.cpp`, `tests/test_llm_parser.cpp` and sources `src/listener/channel_joiner.cpp`, `src/listener/anti_idle.cpp`, `src/listener/message_sink.cpp`, `src/llm/claude_client.cpp`, `src/parser/item_registry.cpp`, `src/parser/regex_parser.cpp`, `src/parser/llm_parser.cpp`.
   - Line 104 becomes: `target_include_directories(tibia-mcp-tests PRIVATE src)`
   - From `target_link_libraries(tibia-mcp-tests ...)`: delete the `tibia-protocol` line.
   - Delete the whole `add_executable(tibia-listener ...)` block (117–129), the `add_executable(tibia-parser ...)` block (131–144), and the trailing `# Protocol library (sub-project 2)` + `add_subdirectory(lib/protocol)` lines.
 
-- [ ] **Step 5: Clean rebuild + full test run**
+- [x] **Step 5: Clean rebuild + full test run**
 
 ```bash
 rm -rf build && cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure
 ```
 Expected: `tibia-mcp-tests` is the only registered test and passes. Test count should be **40** (75 − 35 removed: trade_store 4, channel_joiner 5, anti_idle 4, message_sink 1, claude_client 3, item_registry 3, regex_parser 8, llm_parser 3, query_trade_offers 2, get_price_history 1, list_active_traders 1). Verify: `./build/tibia-mcp-tests --gtest_list_tests | grep -c '^  '` → `40`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A && git commit -m "refactor: archive listener/parser/protocol pipeline (tag archive/live-listener)"
@@ -185,25 +185,25 @@ git add -A && git commit -m "refactor: archive listener/parser/protocol pipeline
 
 **Keep** the live per-host throttle: `wait_for_rate_limit` / `set_rate_limit` and the configured limits stay untouched.
 
-- [ ] **Step 1: Confirm the dead set is really dead**
+- [x] **Step 1: Confirm the dead set is really dead**
 
 ```bash
 grep -rn 'retry_after\|pending_count\|MAX_PENDING\|check_queue_space' src/ tests/
 ```
 Expected: hits only inside `src/http/client.h` and `src/http/client.cpp`. If any other file (or test) references them, stop — the audit was wrong; report instead of deleting.
 
-- [ ] **Step 2: Edit `src/http/client.h`** — delete the `std::string retry_after;` member from `HttpResponse`, and delete `pending_count`, the explanatory comment, `MAX_PENDING`, and the `check_queue_space` declaration from `RateState`. If `RateState` still has live members (timing fields used by `wait_for_rate_limit`), keep the struct.
+- [x] **Step 2: Edit `src/http/client.h`** — delete the `std::string retry_after;` member from `HttpResponse`, and delete `pending_count`, the explanatory comment, `MAX_PENDING`, and the `check_queue_space` declaration from `RateState`. If `RateState` still has live members (timing fields used by `wait_for_rate_limit`), keep the struct.
 
-- [ ] **Step 3: Edit `src/http/client.cpp`** — delete the `check_queue_space` function body and any calls to it; in the 429/503 branch, delete `response.retry_after = "5";` and change the log line to not reference `response.retry_after` (e.g. `LOG(WARN, "Rate limited by " << host);`).
+- [x] **Step 3: Edit `src/http/client.cpp`** — delete the `check_queue_space` function body and any calls to it; in the 429/503 branch, delete `response.retry_after = "5";` and change the log line to not reference `response.retry_after` (e.g. `LOG(WARN, "Rate limited by " << host);`).
 
-- [ ] **Step 4: Rebuild + test**
+- [x] **Step 4: Rebuild + test**
 
 ```bash
 cmake --build build && ctest --test-dir build --output-on-failure
 ```
 Expected: build clean, 40 tests pass (test_http_client's 5 tests don't touch the removed members — verified in Step 1).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A && git commit -m "refactor(http): remove dead retry_after and bounded-queue scaffolding"
@@ -217,7 +217,7 @@ git add -A && git commit -m "refactor(http): remove dead retry_after and bounded
 - Modify: `README.md` (at minimum lines 16, 31, 55, 115 — plus every row/paragraph describing the listener, parser, or protocol library)
 - Modify: `package.json` (root — description references)
 
-- [ ] **Step 1: Read `README.md` end-to-end** and apply:
+- [x] **Step 1: Read `README.md` end-to-end** and apply:
   - Line 16 (status table, Data MCP row): `21 tools` → `12 tools`.
   - Status-table rows for the listener / protocol library / parser: replace status with `📦 Archived (git tag archive/live-listener)` and one-line rationale: "packet reading is permanently out of scope — see docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md".
   - Line 31 (architecture diagram): `21 tools` → `12 tools`; remove listener/parser boxes if present.
@@ -225,18 +225,18 @@ git add -A && git commit -m "refactor(http): remove dead retry_after and bounded
   - Line 115: `21 MCP tools` → `12 MCP tools`.
   - Add one sentence near the top pointing at the TibiaEdge spec as the current product direction.
 
-- [ ] **Step 2: Verify no stale claims remain**
+- [x] **Step 2: Verify no stale claims remain**
 
 ```bash
 grep -n '21 tools\|21 MCP\|127 tests\|tibia-listener\|tibia-parser' README.md
 ```
 Expected: no output (or only lines explicitly describing the archive).
 
-- [ ] **Step 3: Root `package.json`** — confirm the `description` and `scripts` don't reference deleted paths (`probe:login` uses `tools/tibia_login.js`, which stays — it's a Playwright helper, not the packet listener). Update the description if it mentions the listener.
+- [x] **Step 3: Root `package.json`** — confirm the `description` and `scripts` don't reference deleted paths (`probe:login` uses `tools/tibia_login.js`, which stays — it's a Playwright helper, not the packet listener). Update the description if it mentions the listener.
 
-- [ ] **Step 3b: `tests/test_integration.sh`** — this script is not registered in CMake but checks `[ "$TOOL_COUNT" -ge 15 ]`; change the threshold to `12` (and any "15 tools" wording) so it passes against the post-archive server. (Phase 1 Task 6.5 later updates its Content-Length framing.)
+- [x] **Step 3b: `tests/test_integration.sh`** — this script is not registered in CMake but checks `[ "$TOOL_COUNT" -ge 15 ]`; change the threshold to `12` (and any "15 tools" wording) so it passes against the post-archive server. (Phase 1 Task 6.5 later updates its Content-Length framing.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add README.md package.json && git commit -m "docs: correct tool/test counts, mark listener pipeline archived"
@@ -246,14 +246,14 @@ git add README.md package.json && git commit -m "docs: correct tool/test counts,
 
 ### Task 6: Final verification
 
-- [ ] **Step 1: Clean-room build**
+- [x] **Step 1: Clean-room build**
 
 ```bash
 rm -rf build && cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure
 ```
 Expected: configure/build clean, `tibia-mcp-tests` 40/40 pass.
 
-- [ ] **Step 2: Smoke the MCP server binary**
+- [x] **Step 2: Smoke the MCP server binary**
 
 The transport (`src/mcp/transport.cpp:38-62`) uses **Content-Length framing** at this point (Phase 1 switches it to newline-delimited), so frame the message:
 
@@ -263,7 +263,7 @@ printf 'Content-Length: %d\r\n\r\n%s' "${#BODY}" "$BODY" | ./build/tibia-mcp 2>/
 ```
 Expected: JSON response listing exactly 12 tools.
 
-- [ ] **Step 3: Repo state**
+- [x] **Step 3: Repo state**
 
 ```bash
 git status --short   # expect: clean (only node_modules/package-lock if not ignored/committed)
@@ -271,4 +271,4 @@ git log --oneline -6 # expect: the 5 commits from Tasks 1-5 on top
 git tag -l 'archive/*'
 ```
 
-- [ ] **Step 4: Report** — summarize: tag created, files deleted (count), tools 15→12, tests 75→40, README corrected.
+- [x] **Step 4: Report** — summarize: tag created, files deleted (count), tools 15→12, tests 75→40, README corrected.
