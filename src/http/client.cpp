@@ -51,32 +51,15 @@ void HttpClient::wait_for_rate_limit(const std::string& host) {
     state.last_request = std::chrono::steady_clock::now();
 }
 
-bool HttpClient::check_queue_space(const std::string& host) {
-    auto it = rate_limits_.find(host);
-    if (it == rate_limits_.end()) return true;
-    return it->second.pending_count < RateState::MAX_PENDING;
-}
-
 HttpResponse HttpClient::get(const std::string& url) {
     HttpResponse response;
     std::string host = extract_host(url);
-
-    // Bounded queue check
-    if (!check_queue_space(host)) {
-        response.error = "Rate limit queue full for " + host;
-        LOG(WARN, response.error);
-        return response;
-    }
-
-    auto it = rate_limits_.find(host);
-    if (it != rate_limits_.end()) it->second.pending_count++;
 
     wait_for_rate_limit(host);
 
     CURL* curl = curl_easy_init();
     if (!curl) {
         response.error = "Failed to initialize curl";
-        if (it != rate_limits_.end()) it->second.pending_count--;
         return response;
     }
 
@@ -97,12 +80,9 @@ HttpResponse HttpClient::get(const std::string& url) {
         LOG(DEBUG, "HTTP GET " << url << " — " << response.status_code);
 
         if (response.status_code == 429 || response.status_code == 503) {
-            response.retry_after = "5";
-            LOG(WARN, "Rate limited by " << host << ", Retry-After: " << response.retry_after);
+            LOG(WARN, "Rate limited by " << host);
         }
     }
-
-    if (it != rate_limits_.end()) it->second.pending_count--;
 
     curl_easy_cleanup(curl);
     return response;
