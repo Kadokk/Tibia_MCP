@@ -94,9 +94,9 @@ Scheduled scrapes refresh the bazaar cache (hourly) and boosted boss/creature da
 ## Phased rollout
 
 - **Phase 0 — repo hygiene (days):** archive the live listener and the three listener-fed MCP tools to tag `archive/live-listener` and delete them from the active tree (15 → 12 tools); commit the pending `.gitignore` fix; correct the README tool count; remove dead rate-limit scaffolding.
-- **Phase 1 — core assistant (~2-3 weeks):** extend the wiki item parser to extract NPC buy/sell price tables; implement the auction-comparables valuation (median winning bid over vocation / level ±15% / world-type cohort) on the bazaar cache; agent loop and `/ask` with those tools plus TibiaData lookups; build `/char` and `/boosted` on the TibiaData client, repoint `/price` to NPC values, replace `/offers` with `/auction` and drop `marketRepository` + the `trade_raw_messages`/`trade_offers` tables; metering and free quota; VPS deployment; private beta in 2-3 friendly Discord servers.
+- **Phase 1 — core assistant (~2-3 weeks):** extend the wiki item parser to extract NPC buy/sell price tables; extend the bazaar scraper to also capture **ended** auctions with winning bids (today it parses only current auctions) and implement the auction-comparables valuation (median winning bid over vocation / level ±15% / world-type cohort) on that history; agent loop and `/ask` with those tools plus TibiaData lookups; build `/char` and `/boosted` on the TibiaData client, repoint `/price` to NPC values, replace `/offers` with `/auction` and drop `marketRepository` + the `trade_raw_messages`/`trade_offers` tables; metering and free quota; VPS deployment; private beta in 2-3 friendly Discord servers.
 - **Phase 2 — game knowledge (~1-2 weeks):** wire the existing `search_wiki` MCP tool into the agent, multilingual answer QA.
-- **Phase 3 — alerts and revenue (~2 weeks):** alert scheduler, Stripe payment link and premium role, public launch (Tibia Discords, r/TibiaMMO, fansite communities).
+- **Phase 3 — alerts and revenue (~2 weeks):** alert scheduler, the premium scheduled daily market report (rides on the same scheduler), Stripe payment link and premium role, public launch (Tibia Discords, r/TibiaMMO, fansite communities).
 
 **Phase 3 exit criterion: at least one stranger pays.** If nobody does, adjust price or packaging before spending on promotion.
 
