@@ -12,6 +12,7 @@ import { executeProfileCommand } from './profileCommand';
 import { executeUsageCommand } from './usageCommand';
 import { executeGoalsCommand } from './goalsCommand';
 import { executeSettingsCommand } from './settingsCommand';
+import { executeQuestCommand, autocompleteQuest } from './questCommand';
 import type { McpBridge } from '../mcp/mcpClient';
 import type { TibiaDataClient } from '../sources/tibiaDataClient';
 import type { AccessLimitsService } from '../services/accessLimits';
@@ -21,6 +22,8 @@ import type { CaptureRepository } from '../repositories/captureRepository';
 import type { LinkedCharacterRepository } from '../repositories/linkedCharacterRepository';
 import type { CharacterSnapshotRepository } from '../repositories/characterSnapshotRepository';
 import type { UserSettingsRepository } from '../repositories/userSettingsRepository';
+import type { QuestRepository } from '../repositories/questRepository';
+import type { QuestEligibilityService } from '../services/questEligibilityService';
 
 async function placeholderExecute(context: CommandContext): Promise<CommandResponse> {
   return createTextResponse(`/${context.interaction.commandName} is not wired to services yet.`, true);
@@ -121,7 +124,16 @@ const commandData: CommandData[] = [
     .addSubcommand((s) => s.setName('set').setDescription('Change a setting')
       .addStringOption((o) => o.setName('setting').setDescription('Which setting').setRequired(true)
         .addChoices({ name: 'memory', value: 'memory' }, { name: 'personalize-in-guilds', value: 'personalize-in-guilds' }))
-      .addBooleanOption((o) => o.setName('enabled').setDescription('on (true) or off (false)').setRequired(true)))
+      .addBooleanOption((o) => o.setName('enabled').setDescription('on (true) or off (false)').setRequired(true))),
+  new SlashCommandBuilder()
+    .setName('quest')
+    .setDescription('Quest companion: track progress and find your next quest.')
+    .addSubcommand((s) => s.setName('track').setDescription('Track a quest on your checklist')
+      .addStringOption((o) => o.setName('quest').setDescription('Quest name').setRequired(true).setAutocomplete(true)))
+    .addSubcommand((s) => s.setName('done').setDescription('Mark a quest as completed')
+      .addStringOption((o) => o.setName('quest').setDescription('Quest name').setRequired(true).setAutocomplete(true)))
+    .addSubcommand((s) => s.setName('list').setDescription('Your quest checklist'))
+    .addSubcommand((s) => s.setName('next').setDescription('Level-appropriate quests you have not done'))
 ];
 
 export const commandRegistrationPayloads: RESTPostAPIChatInputApplicationCommandsJSONBody[] = commandData.map((data) => data.toJSON());
@@ -143,6 +155,8 @@ export type RegistryDeps = AskCommandDeps & {
   links: Pick<LinkedCharacterRepository, 'listForUser' | 'countForUser'>;
   snapshots: Pick<CharacterSnapshotRepository, 'latestForLink'>;
   settings: Pick<UserSettingsRepository, 'getForUser' | 'upsert'>;
+  quests: Pick<QuestRepository, 'findByNameLoose' | 'upsertProgress' | 'countTracked' | 'listProgressForUser' | 'searchByNamePrefix'>;
+  questEligibility: Pick<QuestEligibilityService, 'next'>;
 };
 
 // Real registry with dependency-injected executes. ask/char/boosted/price/auction
@@ -197,6 +211,12 @@ export function buildRegistry(deps: RegistryDeps): BotCommand[] {
         return { data, execute: (ctx: CommandContext) => executeGoalsCommand({ interaction: ctx.interaction, tiers: deps.tiers, memory: deps.memory }) };
       case 'settings':
         return { data, execute: (ctx: CommandContext) => executeSettingsCommand({ interaction: ctx.interaction, settings: deps.settings }) };
+      case 'quest':
+        return {
+          data,
+          execute: (ctx: CommandContext) => executeQuestCommand({ interaction: ctx.interaction, tiers: deps.tiers, quests: deps.quests, questEligibility: deps.questEligibility, links: deps.links }),
+          autocomplete: (interaction) => autocompleteQuest(interaction, deps.quests)
+        };
       default:
         return { data, execute: placeholderExecute };
     }
