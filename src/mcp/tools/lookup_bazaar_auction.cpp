@@ -14,7 +14,10 @@ std::string LookupBazaarAuctionTool::description() const {
 nlohmann::json LookupBazaarAuctionTool::parameters_schema() const {
     return {
         {"type", "object"},
-        {"properties", {{"id", {{"type", "string"}, {"description", "Auction ID"}}}}},
+        {"properties", {
+            {"id", {{"type", "string"}, {"description", "Auction ID"}}},
+            {"include_quest_lines", {{"type", "boolean"}, {"description", "Also list completed quest lines, achievements, charm points and bestiary progress (long output)"}}}
+        }},
         {"required", {"id"}}
     };
 }
@@ -36,7 +39,8 @@ ToolResult LookupBazaarAuctionTool::execute(const nlohmann::json& params) {
         return {"Error: Failed to fetch auction data — " + resp.error, true};
     }
 
-    std::string result = Bazaar::parse_auction_detail(resp.body);
+    const bool include_quest_lines = params.value("include_quest_lines", false);
+    std::string result = Bazaar::parse_auction_detail(resp.body, include_quest_lines);
     cache_.put(key, result, 600);
     return {result, false};
 }
