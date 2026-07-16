@@ -1,5 +1,5 @@
 {
-  "_todo": "SEED SET — 18 cases: 12 core (3 per language: market/auction, game-knowledge, refusal) + 2 en personalization (personal, baseline) + 4 Phase 3 memory (continuity, poison, gating, memory-write). TODO: the spec wants 30-50 cases by end of beta; grow this set before launch.",
+  "_todo": "SEED SET — 20 cases: 12 core (3 per language: market/auction, game-knowledge, refusal) + 2 en personalization (personal, baseline) + 4 Phase 3 memory (continuity, poison, gating, memory-write) + 2 Phase 4 quest (quest-info, quest-eligible). TODO: the spec wants 30-50 cases by end of beta; grow this set before launch.",
   "cases": [
     {
       "id": "en-auction-1",
@@ -156,6 +156,28 @@
       "mustContain": [],
       "mustNotContain": ["premium feature"],
       "langMarkers": ["you", "to", "remember", "noted", "weekend", "mornings"]
+    },
+    {
+      "id": "en-quest-info-1",
+      "lang": "en",
+      "question": "What do I need for the Against the Spider Cult quest?",
+      "userFixture": "ek250-antica",
+      "expectRefusal": false,
+      "mustCallTool": "get_quest_info",
+      "mustContain": ["level"],
+      "mustNotContain": ["guaranteed"],
+      "langMarkers": ["quest", "level", "spider"]
+    },
+    {
+      "id": "en-quest-eligible-1",
+      "lang": "en",
+      "question": "Am I eligible to start the Against the Spider Cult quest right now?",
+      "userFixture": "ek250-antica-premium",
+      "expectRefusal": false,
+      "mustCallTool": "check_quest_eligibility",
+      "mustContain": ["eligible"],
+      "mustNotContain": [],
+      "langMarkers": ["quest", "eligible", "level"]
     }
   ]
 }

@@ -137,6 +137,28 @@ function makeLocalMemory(f: UserFixture | undefined) {
   };
 }
 
+// Canned quest corpus for the eval (the Task 10 QUEST literal, verbatim), so the
+// quest tools return a stable, grounded quest without a live DB.
+const EVAL_QUEST = {
+  id: 7, slug: 'against-the-spider-cult-quest', title: 'Against the Spider Cult Quest',
+  quest_line_label: 'Tibia Tales', min_level: 42, rec_level: 45, premium: true,
+  location: 'Edron Orc Cave', legend: 'The orcs are breeding giant spiders.',
+  rewards_json: ['Terra Amulet'], dangers_json: ['Giant Spider'], requirements_json: ['Shovel', 'Rope'],
+  steps_json: ['Ask Daniel Steelsoul in Edron for the mission'], achievement_names: [],
+  wiki_url: 'https://tibia.fandom.com/wiki/Against_the_Spider_Cult_Quest',
+  attribution: 'Content from TibiaWiki (tibia.fandom.com), CC BY-SA.', source_revision: 842642
+};
+
+// Per-case recording fakes for the local quest tools, mirroring makeLocalMemory:
+// pushes get_quest_info / check_quest_eligibility into the shared calls array so
+// mustCallTool can assert the model invoked them. Spider-name queries hit EVAL_QUEST.
+function makeLocalQuests(fixture: UserFixture | undefined, calls: string[]) {
+  return {
+    quests: { findByNameLoose: async (name: string) => { calls.push('get_quest_info'); return /spider/i.test(name) ? EVAL_QUEST : null; } },
+    questEligibility: { check: async (_u: string, name: string) => { calls.push('check_quest_eligibility'); return /spider/i.test(name) ? { kind: 'ok', eligible: true, reasons: [], quest: EVAL_QUEST } : { kind: 'not_found' }; } }
+  };
+}
+
 // --- main ----------------------------------------------------------------
 
 type CaseResult = {
@@ -197,21 +219,20 @@ async function main(): Promise<void> {
     const userContext = fixture ? await renderFixtureContext(fixture) : null;
     if (userContext) fixtureBridge.seed(userContext);
     const local = makeLocalMemory(fixture);
+    const localQuests = makeLocalQuests(fixture, local.calls);
     const caseStartedAt = Date.now();
     console.error(`[eval] → ${c.id} …`);
     try {
       const result = await withCaseTimeout(
         runAsk({
           anthropic,
-          // Minimal quest fakes just to satisfy LocalToolDeps here; Task 18 replaces
-          // these with recording fakes (makeLocalQuests) + golden cases. Whole-arg
-          // `as never` mirrors localTools.test.ts and also sidesteps the pre-existing
-          // makeLocalMemory.searchFacts fake-shape gap (unrelated eval-stub debt).
+          // `...localQuests` are the recording quest fakes (get_quest_info /
+          // check_quest_eligibility). Whole-arg `as never` mirrors localTools.test.ts
+          // and sidesteps the pre-existing makeLocalMemory.searchFacts fake-shape gap.
           mcp: createToolRouter({
             mcp: fixtureBridge.bridge,
             ...local.deps,
-            quests: { findByNameLoose: async () => null },
-            questEligibility: { check: async () => ({ kind: 'not_found' }) }
+            ...localQuests
           } as never).bind('eval-user', fixture?.tier ?? 'free'),
           tools,
           model,
@@ -303,9 +324,11 @@ async function main(): Promise<void> {
   // Prompt-cache health gate: if the static prefix (system + tools) is not being
   // reused across cases, the cache-read ratio collapses.
   const cacheRatio = totalCacheRead / Math.max(1, totalAllInInput);
-  // prefix ~2.4k tokens < Haiku's cacheable-prefix minimum; caching is inert until the
-  // tool surface grows (Phase 4 quest tools) — recalibrate then.
-  const minRatio = Number(process.env.EVAL_MIN_CACHE_RATIO ?? '0');
+  // Caching is live: the padded ≥4224-token prefix (system + quest tools) now exceeds
+  // Haiku's cacheable minimum. Default gate ≈ 70% of the first live 20-case run's
+  // observed 28.1% cache-read ratio. Recalibrate when the golden set grows to 30–50
+  // (more single-round cases lower the natural ratio).
+  const minRatio = Number(process.env.EVAL_MIN_CACHE_RATIO ?? '0.19');
   console.log(`Cache-read ratio: ${(cacheRatio * 100).toFixed(1)}% (threshold ${(minRatio * 100).toFixed(0)}%)`);
   if (cacheRatio < minRatio) process.exitCode = 1;   // report still prints in full
 

@@ -124,3 +124,14 @@ do not reorder the items above).
 6. From a free-tier account: `/ask remember that I like team hunts` → polite premium message; `memory_facts` has NO row for that user; `/goals set` → upsell reply.
 7. `/settings set setting:memory enabled:false` → `/ask` answers unpersonalized; re-enable and confirm personalization returns.
 8. `/memory forget-all` → confirm → zero rows for the user across all user-scoped tables (including `entities`/`relations`).
+
+## Phase 4 verification
+
+1. `docker compose up --build` — migration 004 applies; quest-import scheduler start logged (or disabled via `QUEST_IMPORT_ENABLED=false`).
+2. Full import: `npm run import:quests` → `SELECT COUNT(*) FROM quests` ≥ 400; `wiki_import_runs` row `done`; spot-check 3 quests for sane steps + wiki links (exit criterion 2).
+3. `/quest track` autocomplete suggests titles after 3 letters; track → `/quest list` shows it; a later `/ask` mentions the tracked quest (context injection).
+4. `/ask what do I need for the Against the Spider Cult quest?` → steps + wiki link + attribution.
+5. Fresh-user seed flow (exit criterion 1): `/link add` a bazaar-bought character → `/link seed auction:<URL>` → summary with matched counts → `/quest next` returns a level-appropriate quest with a wiki link and excludes seeded-done lines.
+6. `/quest done` a seeded quest, re-run `/link seed` with the same auction → the self-report survives (no downgrade).
+7. Free account: 4th `/quest track` → upsell; `/quest` data intact after `/memory forget everything` EXCEPT progress rows (they must be gone).
+8. Caching live: two `/ask` in a row → second row in `ai_usage` has `cache_read_tokens > 0`.
