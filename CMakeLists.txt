@@ -54,7 +54,7 @@ target_include_directories(tibia-mcp PRIVATE src)
 target_link_libraries(tibia-mcp PRIVATE
     nlohmann_json::nlohmann_json
     CURL::libcurl
-    SQLite3::SQLite3
+    SQLite::SQLite3
 )
 
 enable_testing()
@@ -84,7 +84,7 @@ target_include_directories(tibia-mcp-tests PRIVATE src)
 target_link_libraries(tibia-mcp-tests PRIVATE
     GTest::gtest_main
     nlohmann_json::nlohmann_json
-    SQLite3::SQLite3
+    SQLite::SQLite3
     CURL::libcurl
 )
 target_compile_definitions(tibia-mcp-tests PRIVATE

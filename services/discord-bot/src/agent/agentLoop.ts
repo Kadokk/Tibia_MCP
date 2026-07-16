@@ -28,8 +28,14 @@ export async function runAsk(deps: {
     micros = 0,
     rounds = 0;
 
+  // Opt-in round tracing (silent unless AGENT_TRACE=1) — lets the eval harness see
+  // exactly which round a live messages.create() call stalls in.
+  const trace = process.env.AGENT_TRACE === '1' ? (msg: string): void => console.error(`[agent-trace] ${msg}`) : undefined;
+
   while (rounds < MAX_ROUNDS) {
     rounds += 1;
+    const roundStartedAt = Date.now();
+    trace?.(`round ${rounds}: calling messages.create`);
     const response = await deps.anthropic.messages.create({
       model: deps.model,
       max_tokens: MAX_TOKENS,
@@ -37,6 +43,7 @@ export async function runAsk(deps: {
       tools: deps.tools,
       messages
     });
+    trace?.(`round ${rounds}: ${response.stop_reason} in ${Date.now() - roundStartedAt}ms`);
     inputTokens += response.usage.input_tokens + (response.usage.cache_creation_input_tokens ?? 0) + (response.usage.cache_read_input_tokens ?? 0);
     outputTokens += response.usage.output_tokens;
     micros += costUsdMicros(response.usage);
