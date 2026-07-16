@@ -34,6 +34,15 @@ describe('MemoryRepository', () => {
     expect(params).toEqual(['u1']);
   });
 
+  it('forget everything also wipes quest progress, still in ONE statement', async () => {
+    const db = fakeDb([]);
+    await new MemoryRepository(db as unknown as DbClient).forgetEverything('u1');
+    expect(db.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('DELETE FROM quest_progress');
+    expect(params).toEqual(['u1']);
+  });
+
   it('counts active facts for one user only', async () => {
     const db = fakeDb([{ count: '7' }]);
     await expect(new MemoryRepository(db as unknown as DbClient).countActiveFacts('u1')).resolves.toBe(7);

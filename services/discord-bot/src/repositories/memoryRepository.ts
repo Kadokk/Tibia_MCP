@@ -115,6 +115,7 @@ export class MemoryRepository {
             del_facts AS (DELETE FROM memory_facts WHERE discord_user_id = $1),
             del_relations AS (DELETE FROM relations WHERE discord_user_id = $1),
             del_entities AS (DELETE FROM entities WHERE discord_user_id = $1),
+            del_quest_progress AS (DELETE FROM quest_progress WHERE discord_user_id = $1),
             del_links AS (DELETE FROM linked_characters WHERE discord_user_id = $1)
        DELETE FROM user_settings WHERE discord_user_id = $1`,
       [discordUserId],
