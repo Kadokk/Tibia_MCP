@@ -52,6 +52,34 @@ describe('QuestRepository — corpus', () => {
     const db = fakeDb([{ count: '412' }]);
     await expect(new QuestRepository(db as unknown as DbClient).countQuests()).resolves.toBe(412);
   });
+
+  it('findByLabelExact matches only the three exact predicates — no contains-fallback (bulk seeding)', async () => {
+    const db = fakeDb([]);
+    await new QuestRepository(db as unknown as DbClient).findByLabelExact('Blood Brothers');
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('lower(title) = lower($1)');
+    expect(sql).toContain("lower(title) = lower($1 || ' Quest')");
+    expect(sql).toContain('lower(quest_line_label) = lower($1)');
+    expect(sql).not.toContain('ILIKE');
+    expect(sql).toContain('ORDER BY');
+    expect(params).toEqual(['Blood Brothers']);
+  });
+
+  it('findBySlug looks up one active quest by exact slug', async () => {
+    const db = fakeDb([]);
+    await new QuestRepository(db as unknown as DbClient).findBySlug('blood-brothers-quest');
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('slug = $1');
+    expect(params).toEqual(['blood-brothers-quest']);
+  });
+
+  it('findByAchievementNames uses the jsonb any-key operator over a text[]', async () => {
+    const db = fakeDb([]);
+    await new QuestRepository(db as unknown as DbClient).findByAchievementNames(['Deep Diver', 'Snowbunny']);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('achievement_names ?| $1::text[]');
+    expect(params).toEqual([['Deep Diver', 'Snowbunny']]);
+  });
 });
 
 describe('QuestRepository — progress (user-scoped)', () => {

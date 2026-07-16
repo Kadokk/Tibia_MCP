@@ -74,6 +74,37 @@ export class QuestRepository {
     return rows[0] ?? null;
   }
 
+  /** Bulk-seed resolution: the three EXACT predicates only, no contains-fallback (must not fuzzy-match). */
+  async findByLabelExact(label: string): Promise<QuestRow | null> {
+    const rows = await this.db.query<QuestRow>(
+      `SELECT * FROM quests
+       WHERE active AND (
+         lower(title) = lower($1)
+         OR lower(title) = lower($1 || ' Quest')
+         OR lower(quest_line_label) = lower($1)
+       )
+       ORDER BY (lower(title) = lower($1)) DESC,
+                (lower(title) = lower($1 || ' Quest')) DESC,
+                (lower(quest_line_label) = lower($1)) DESC,
+                length(title)
+       LIMIT 1`,
+      [label]);
+    return rows[0] ?? null;
+  }
+
+  async findBySlug(slug: string): Promise<QuestRow | null> {
+    const rows = await this.db.query<QuestRow>(
+      'SELECT * FROM quests WHERE active AND slug = $1 LIMIT 1', [slug]);
+    return rows[0] ?? null;
+  }
+
+  /** Quests whose achievement_names JSONB array shares ANY entry with the given names. */
+  async findByAchievementNames(names: string[]): Promise<Array<{ id: number; title: string; achievement_names: string[] }>> {
+    return this.db.query(
+      'SELECT id, title, achievement_names FROM quests WHERE active AND achievement_names ?| $1::text[]',
+      [names]);
+  }
+
   async countQuests(): Promise<number> {
     const rows = await this.db.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM quests WHERE active');
     return Number(rows[0]?.count ?? 0);
