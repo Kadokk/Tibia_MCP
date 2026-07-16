@@ -335,7 +335,7 @@ async getCharacter(name: string): Promise<CharacterInfo | null> {
 - [ ] **Step 4: Run tests — the whole file, plus charCommand (renders CharacterInfo)**
 
 Run: `npx vitest run src/sources/tibiaDataClient.test.ts src/commands/charCommand.test.ts`
-Expected: PASS. If `charCommand.test.ts` builds `CharacterInfo` literals, add the new fields to those literals (additive; do not change what `/char` renders).
+Expected: PASS. Two known breakages to fix here: (a) `tibiaDataClient.test.ts`'s existing first test does an exact `toEqual` on the `getCharacter` result — extend its expected object with the six new fields; (b) if `charCommand.test.ts` builds `CharacterInfo` literals, add the new fields there too (additive; do not change what `/char` renders).
 
 - [ ] **Step 5: Commit**
 
@@ -460,7 +460,7 @@ it('accumulates cache creation/read tokens into the result', async () => {
 });
 ```
 
-(Import `SYSTEM_PROMPT` from `./systemPrompt` in the test. If the file's response helper doesn't accept usage overrides, extend it.)
+(Import `SYSTEM_PROMPT` from `./systemPrompt` in the test. Note: the existing test file's helper is `fakeAnthropic(...)`, not `textResponse()` — adapt these snippets to the file's actual helper, extending it to accept usage overrides for the cache-token test.)
 
 - [ ] **Step 2: Run to verify failure** — `npx vitest run src/agent/agentLoop.test.ts` → FAIL
 
@@ -1014,7 +1014,12 @@ export class PlayerContextService {
     settings: Pick<UserSettingsRepository, 'getForUser'>;
   }) {}
 
-  /** Returns the dynamic system block, or null (= request stays byte-identical to Phase 1). */
+  /**
+   * Returns the dynamic system block, or null (= the Anthropic request stays
+   * byte-identical to Phase 1 — the cache-stable path for unlinked users).
+   * Runs two cheap indexed queries per /ask; if this is ever cached, the
+   * null-context path must keep returning null or unlinked users lose cache hits.
+   */
   async buildUserContext(discordUserId: string, opts: { inGuild: boolean }): Promise<string | null> {
     const settings = await this.deps.settings.getForUser(discordUserId);
     if (!settings.memoryEnabled) return null;
@@ -1862,7 +1867,9 @@ it('link declares add/verify/remove subcommands', () => {
 `env.test.ts` (extend):
 ```ts
 it('defaults PROFILE_SYNC_TICK_MS to 5 minutes', () => {
-  expect(parseEnv(validEnv()).profileSyncTickMs).toBe(300_000);   // reuse the file's valid-env helper
+  // env.test.ts has no shared valid-env helper — build the env object inline the
+  // way the file's existing tests do.
+  expect(parseEnv(inlineValidEnvObject).profileSyncTickMs).toBe(300_000);
 });
 ```
 
@@ -1949,7 +1956,9 @@ const commands = buildRegistry({
 - [ ] **Step 4: Run everything**
 
 Run: `npm test -- --run && npm run typecheck`
-Expected: all suites PASS, no type errors. Fix any test in the suite still using the old `ask`/`recordAiQuestion` signatures.
+Expected: all suites PASS, no type errors. Known breakages to fix in this step (they surface as failures immediately):
+- `registry.test.ts`: the payload-count assertion changes 7 → 10; the "placeholder" test uses `usage` as its example command — switch it to `setup` (the only remaining placeholder); `fakeRegistryDeps()` needs the four new deps (`linkService`, `memory`, `links`, `snapshots`) plus `context`/`captures` to typecheck.
+- Any test still using the old `ask` (2-arg) or `recordAiQuestion` (no cache fields) signatures.
 
 - [ ] **Step 5: Commit** — `git add -A src/ && git commit -m "feat(bot): wire phase-2 commands, profile sync scheduler, and context-aware ask"`
 
@@ -1960,6 +1969,8 @@ Expected: all suites PASS, no type errors. Fix any test in the suite still using
 **Files:**
 - Create: `services/discord-bot/eval/userFixtures.json`
 - Modify: `services/discord-bot/eval/run.ts`, `services/discord-bot/eval/golden.json`
+
+**Debt note (Phase 3):** the spec wants user fixtures rendered through the real `playerContextService` and a cache-read-ratio failure threshold inside the eval. Phase 2 uses a hand-written fixture string (format drift risk: regenerate it if `PlayerContextService` rendering changes) and covers the cache criterion via the Task 5 unit test + live-smoke token comparison. Phase 3's eval work picks both up properly.
 
 - [ ] **Step 1: Add the fixture file**
 
