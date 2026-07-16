@@ -26,7 +26,12 @@ ToolResult LookupBazaarAuctionTool::execute(const nlohmann::json& params) {
     std::string id = params.value("id", "");
     if (id.empty()) return {"Error: id parameter is required", true};
 
+    // Scope the cache key by include_quest_lines: the flag changes the output
+    // shape, so the short-form and quest-lines variants must never share an entry
+    // (a cached short form would otherwise shadow a later quest-lines request).
+    const bool include_quest_lines = params.value("include_quest_lines", false);
     std::string key = "lookup_bazaar_auction:" + id;
+    if (include_quest_lines) key += ":quests";
 
     auto cached = cache_.get(key);
     if (cached && !cached->is_stale) {
@@ -39,7 +44,6 @@ ToolResult LookupBazaarAuctionTool::execute(const nlohmann::json& params) {
         return {"Error: Failed to fetch auction data — " + resp.error, true};
     }
 
-    const bool include_quest_lines = params.value("include_quest_lines", false);
     std::string result = Bazaar::parse_auction_detail(resp.body, include_quest_lines);
     cache_.put(key, result, 600);
     return {result, false};
