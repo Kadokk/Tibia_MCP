@@ -3,6 +3,8 @@ import type { AskResult } from '../agent/agentLoop';
 import type { AccessLimitsService } from '../services/accessLimits';
 import type { UsageRepository } from '../repositories/usageRepository';
 import type { UserTierRepository } from '../repositories/userTierRepository';
+import type { PlayerContextService } from '../services/playerContextService';
+import type { CaptureRepository } from '../repositories/captureRepository';
 
 export type RateLimiter = { check(userId: string, now?: number): boolean };
 
@@ -31,7 +33,9 @@ export type AskCommandDeps = {
   access: Pick<AccessLimitsService, 'canAskAi'>;
   usage: Pick<UsageRepository, 'aiQuestionsToday' | 'recordAiQuestion' | 'globalSpendTodayUsdMicros'>;
   tiers: Pick<UserTierRepository, 'getTier'>;
-  ask: (question: string, askerName: string) => Promise<AskResult>;
+  context: Pick<PlayerContextService, 'buildUserContext'>;
+  captures: Pick<CaptureRepository, 'append'>;
+  ask: (question: string, askerName: string, userContext: string | null) => Promise<AskResult>;
   dailySpendCapUsdMicros: number;
 };
 
@@ -67,8 +71,21 @@ export async function executeAskCommand(
   await interaction.deferReply();
   try {
     const question = interaction.options.getString('question', true);
-    const result = await input.ask(question, interaction.user.displayName ?? 'A player');
-    await input.usage.recordAiQuestion({ discordUserId: userId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, costUsdMicros: result.costUsdMicros });
+    let userContext: string | null = null;
+    try {
+      userContext = await input.context.buildUserContext(userId, { inGuild: interaction.inGuild() });
+    } catch (err) {
+      console.error('player context failed, answering unpersonalized', err);
+    }
+    const result = await input.ask(question, interaction.user.displayName ?? 'A player', userContext);
+    await input.usage.recordAiQuestion({
+      discordUserId: userId, inputTokens: result.inputTokens, outputTokens: result.outputTokens,
+      cacheCreationTokens: result.cacheCreationTokens, cacheReadTokens: result.cacheReadTokens,
+      costUsdMicros: result.costUsdMicros
+    });
+    void input.captures
+      .append({ discordUserId: userId, kind: 'qa_turn', content: `Q: ${question}\nA: ${result.text.slice(0, 200)}` })
+      .catch((err) => console.error('capture append failed', err));
     await interaction.editReply({ content: result.text.slice(0, 1990) });
   } catch (err) {
     console.error('ask failed', err);

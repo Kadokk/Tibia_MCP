@@ -10,7 +10,8 @@ function fakeInteraction(question = 'is this axe good?') {
     deferReply: vi.fn(),
     editReply: vi.fn(),
     user: { id: 'u1', displayName: 'Kad' },
-    options: { getString: vi.fn().mockReturnValue(question) }
+    options: { getString: vi.fn().mockReturnValue(question) },
+    inGuild: vi.fn().mockReturnValue(false)
   };
 }
 
@@ -29,16 +30,20 @@ function fakeDeps(opts: {
   };
   const tiers = { getTier: vi.fn().mockResolvedValue(opts.tier ?? 'free') };
   const ask = vi.fn().mockResolvedValue(
-    opts.askResult ?? { text: 'answer', inputTokens: 10, outputTokens: 5, costUsdMicros: 20, rounds: 1 }
+    opts.askResult ?? { text: 'answer', inputTokens: 10, outputTokens: 5, cacheCreationTokens: 0, cacheReadTokens: 0, costUsdMicros: 20, rounds: 1 }
   );
   const rateLimiter = { check: vi.fn().mockReturnValue(opts.rateOk ?? true) };
+  const context = { buildUserContext: vi.fn().mockResolvedValue(null) };
+  const captures = { append: vi.fn().mockResolvedValue(undefined) };
   return {
     access: new AccessLimitsService(),
     usage,
     tiers,
     ask,
     dailySpendCapUsdMicros: opts.cap ?? 700_000,
-    rateLimiter
+    rateLimiter,
+    context,
+    captures
   };
 }
 
@@ -137,11 +142,13 @@ describe('executeAskCommand', () => {
 
     expect(result).toBeNull();
     expect(interaction.deferReply).toHaveBeenCalled();
-    expect(deps.ask).toHaveBeenCalledWith('is this axe good?', 'Kad');
+    expect(deps.ask).toHaveBeenCalledWith('is this axe good?', 'Kad', null);
     expect(deps.usage.recordAiQuestion).toHaveBeenCalledWith({
       discordUserId: 'u1',
       inputTokens: 10,
       outputTokens: 5,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
       costUsdMicros: 20
     });
     expect(interaction.editReply).toHaveBeenCalledWith({ content: 'answer' });
@@ -166,12 +173,46 @@ describe('executeAskCommand', () => {
   it('truncates the answer to fit a Discord message', async () => {
     const interaction = fakeInteraction();
     const deps = fakeDeps({
-      askResult: { text: 'x'.repeat(5000), inputTokens: 1, outputTokens: 1, costUsdMicros: 1, rounds: 1 }
+      askResult: { text: 'x'.repeat(5000), inputTokens: 1, outputTokens: 1, cacheCreationTokens: 0, cacheReadTokens: 0, costUsdMicros: 1, rounds: 1 }
     });
 
     await run(interaction, deps);
 
     const editArg = interaction.editReply.mock.calls[0][0] as { content: string };
     expect(editArg.content.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('passes the player context into ask and records a qa_turn capture', async () => {
+    const interaction = fakeInteraction('the question');
+    const deps = fakeDeps();
+    deps.context.buildUserContext = vi.fn().mockResolvedValue('PLAYER NOTES — test');
+
+    const result = await run(interaction, deps);
+
+    expect(result).toBeNull();
+    expect(deps.context.buildUserContext).toHaveBeenCalledWith('u1', { inGuild: expect.any(Boolean) });
+    expect(deps.ask).toHaveBeenCalledWith('the question', expect.any(String), 'PLAYER NOTES — test');
+    expect(deps.captures.append).toHaveBeenCalledWith(expect.objectContaining({ discordUserId: 'u1', kind: 'qa_turn' }));
+  });
+
+  it('answers even when context building fails (personalization must never break /ask)', async () => {
+    const interaction = fakeInteraction('the question');
+    const deps = fakeDeps();
+    deps.context.buildUserContext = vi.fn().mockRejectedValue(new Error('db down'));
+
+    await run(interaction, deps);
+
+    expect(deps.ask).toHaveBeenCalledWith('the question', expect.any(String), null);
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: 'answer' });
+  });
+
+  it('answers even when the capture write fails', async () => {
+    const interaction = fakeInteraction();
+    const deps = fakeDeps();
+    deps.captures.append = vi.fn().mockRejectedValue(new Error('db down'));
+
+    await run(interaction, deps);
+
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: 'answer' });
   });
 });
