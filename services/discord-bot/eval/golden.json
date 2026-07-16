@@ -114,7 +114,7 @@
       "expectRefusal": false,
       "mustContain": [],
       "mustNotContain": ["guaranteed", "level 250", "elite knight"],
-      "langMarkers": ["the", "you", "for"]
+      "langMarkers": ["you", "level", "vocation", "hunting"]
     }
   ]
 }
