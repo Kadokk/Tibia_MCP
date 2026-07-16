@@ -29,7 +29,7 @@ Obsidian was evaluated as a backend and rejected: it is a single-user desktop ap
 | Premium split | "Memory light/deep" (see Tiers) |
 | Memory backend | Postgres rows (mem0-style distillation); files rejected for multi-user concurrency |
 | Quest knowledge | TS batch importer via MediaWiki `api.php` → Postgres; weekly refresh |
-| Quest progress | Self-report primary; auction snapshots + achievement inference as seeds |
+| Quest progress | Self-report primary; seeded from auction snapshots (quest lines + full achievement list; auctioned chars only) and from TibiaData displayed achievements (all chars; weak signal, low confidence) |
 | Payments | Stripe Payment Link (as previously approved); evaluate Discord native subscriptions in Phase 5 before switching |
 
 ## Tiers
@@ -39,7 +39,7 @@ Obsidian was evaluated as a backend and rejected: it is a single-user desktop ap
 | Linked characters | 1 | All on account (up to 5) |
 | Profile-personalized answers | Yes | Yes |
 | Quest checklist | Small fair-use cap (3 tracked) | Unlimited |
-| Conversation memory + goals | — (fact cap ~50, no goals) | Yes (fact cap ~1000) |
+| Conversation memory + goals | — | Yes (fact cap ~1000) |
 | Proactive insights | Weekly digest only | Full insight DMs |
 | Obsidian vault export | — | Yes |
 | AI questions | 5/day | 200/day fair-use |
@@ -55,6 +55,8 @@ Obsidian was evaluated as a backend and rejected: it is a single-user desktop ap
 
 **Read path:** the pre-injected block is primary (personalization must not depend on the model choosing to call a tool); a `recall_memory` tool (Postgres FTS) covers the long tail. **Write path:** async distillation is primary; a `remember` tool writes user-stated facts immediately.
 
+**Tier gating:** captures are recorded for all users (cheap, enables upgrade), but distillation, fact injection, goals, and the `remember`/`recall_memory` tools are premium. A free user's dynamic block carries only the player card and tracked quests. The tool list stays byte-identical for cache stability regardless of tier — the dispatcher enforces gating and returns a polite "premium feature" result.
+
 **Prompt-cache layout** (the load-bearing constraint): `[tool defs — breakpoint 1] [static system prompt — breakpoint 2] [dynamic user block — breakpoint 3]`. The static prefix stays byte-identical across users and requests; the dynamic block sits after it, and its own breakpoint lets rounds 2-8 of a multi-round question re-read it at 0.1× cost. New `ai_usage` columns track cache read/write tokens; the eval fails if the cache-hit ratio regresses.
 
 **Marginal cost:** ≈$0.01 per question including distillation — sustainable at 200 questions/day premium.
@@ -64,7 +66,7 @@ Obsidian was evaluated as a backend and rejected: it is a single-user desktop ap
 - **Quest eligibility engine: bot TypeScript.** Eligibility joins per-user Postgres state (snapshots, progress, goals) with quest metadata (also Postgres). The C++ MCP server stays a stateless public-data fetcher — no Postgres access, identity preserved.
 - **Local agent tools** (`services/discord-bot/src/agent/localTools.ts`): `recall_memory`, `remember`, `get_quest_info`, `check_quest_eligibility`. The tool list sent to Anthropic merges MCP + local tools once, in stable order; a router dispatches by name. **The user ID binds at dispatch time and is never a model-controlled parameter** — this is the memory-isolation cornerstone.
 - **Profile sync.** A scheduler polls TibiaData for `sync_enabled` linked characters (staggered; 30 min free, 10 min premium), writes `character_snapshots` only when the payload hash changes, and computes `diff_json` (level-ups, deaths, guild changes) that feeds captures and insights.
-- **Proactive insights.** Reuses `alert_rules`/`alert_deliveries` with a new `alert_type='insight'` and `discord_user_id` column. Insight types: `level_milestone`, `death_review`, `quest_unlocked`, `goal_bazaar_match`, `boosted_match`, `weekly_digest`. A 15-minute scheduler evaluates snapshot diffs and memory facts against rules, dedupes via the existing unique key, and delivers by DM (premium) or channel. Every sent insight becomes a capture, so the assistant knows what it told you.
+- **Proactive insights.** Reuses `alert_rules`/`alert_deliveries` with a new `alert_type='insight'` and `discord_user_id` column. Insight types: `level_milestone`, `death_review`, `quest_unlocked`, `goal_bazaar_match`, `boosted_match`, `weekly_digest`. A 15-minute scheduler evaluates snapshot diffs and memory facts against rules and dedupes via the existing unique key. Real-time insight DMs are premium; the free weekly digest also delivers by DM. Personal insights never post to guild channels. Every sent insight becomes a capture, so the assistant knows what it told you.
 - **Conversation memory.** Distilled facts plus ≤3 recent-turn gists; no transcripts are stored or re-injected. Discord threads are out of v2; reply-to-continue is Phase 6 polish.
 
 ### Quest knowledge pipeline
@@ -88,8 +90,8 @@ Politeness: descriptive User-Agent, 1 request per 2 seconds, exponential backoff
 
 ## New and changed surface
 
-- **C++ MCP (contained):** extend `parse_auction_detail` (`src/sources/bazaar.cpp`) to parse Completed Quest Lines, charm points, and bestiary/bosstiary counts; add `include_quest_lines` to `lookup_bazaar_auction`; new HTML fixture + gtest. Nothing else changes server-side.
-- **Commands:** `/link add|verify|remove|seed <auction>`, `/profile`, `/goals set|list|done`, `/quest track|done|next|list` (autocomplete from `quests`), `/memory show|forget <id>|forget everything` (confirm button), `/settings`, `/export vault` (premium), `/insights` (premium), and a real `/usage` (replacing the placeholder).
+- **C++ MCP (contained):** extend `parse_auction_detail` (`src/sources/bazaar.cpp`) to parse Completed Quest Lines, achievements, charm points, and bestiary/bosstiary counts; add `include_quest_lines` to `lookup_bazaar_auction`; new HTML fixture + gtest. Nothing else changes server-side.
+- **Commands:** `/link add|verify|remove|seed <auction>`, `/profile`, `/goals set|list|done` (premium), `/quest track|done|next|list` (autocomplete from `quests`), `/memory show|forget <id>|forget everything` (confirm button), `/settings`, `/export vault` (premium), `/insights` (premium), and a real `/usage` (replacing the placeholder).
 - **Tier limits** in `tiers.ts`: `linkedCharacters`, `trackedQuests`, `memoryFacts`, `proactiveInsights`, `vaultExport`, `profileSyncMinutes`.
 
 ## Guardrails
@@ -121,6 +123,7 @@ Politeness: descriptive User-Agent, 1 request per 2 seconds, exponential backoff
 - Embeddings/vector search at launch (FTS first; pgvector only on measured need).
 - Discord threads as conversation containers.
 - Per-server premium tier.
+- User-configured alert rules (`item_price`/`bazaar_filter`) as a product surface — memory-driven insights replace them. The schema and evaluator remain as internal plumbing.
 
 ## Risks
 
