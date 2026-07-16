@@ -13,13 +13,19 @@ function fakeRegistryDeps(): RegistryDeps {
       globalSpendTodayUsdMicros: vi.fn().mockResolvedValue(0)
     },
     tiers: { getTier: vi.fn().mockResolvedValue('free') },
-    ask: vi.fn().mockResolvedValue({ text: 'hi', inputTokens: 1, outputTokens: 1, costUsdMicros: 1, rounds: 1 }),
+    context: { buildUserContext: vi.fn().mockResolvedValue(null) },
+    captures: { append: vi.fn().mockResolvedValue(undefined), countForUser: vi.fn().mockResolvedValue(0) },
+    ask: vi.fn().mockResolvedValue({ text: 'hi', inputTokens: 1, outputTokens: 1, cacheCreationTokens: 0, cacheReadTokens: 0, costUsdMicros: 1, rounds: 1 }),
     dailySpendCapUsdMicros: 700_000,
     mcp: { callTool: vi.fn().mockResolvedValue({ text: 'tool output', isError: false }) },
     tibiaData: {
       getCharacter: vi.fn().mockResolvedValue({ name: 'Bobeek', level: 900, vocation: 'Elite Knight', world: 'Antica', residence: 'Thais', lastLogin: null, deaths: [] }),
       getBoosted: vi.fn().mockResolvedValue({ creatureName: 'Demon', bossName: 'Ferumbras' })
-    }
+    },
+    linkService: { add: vi.fn(), verify: vi.fn(), remove: vi.fn() },
+    memory: { listActiveFacts: vi.fn().mockResolvedValue([]), deactivateFact: vi.fn(), forgetEverything: vi.fn() },
+    links: { listForUser: vi.fn().mockResolvedValue([]), countForUser: vi.fn().mockResolvedValue(0) },
+    snapshots: { latestForLink: vi.fn().mockResolvedValue(null) }
   };
 }
 
@@ -42,9 +48,19 @@ describe('command registry', () => {
     expect(commandNames()).not.toContain('offers');
   });
 
+  it('registers the phase-2 commands', () => {
+    expect(commandNames()).toEqual(expect.arrayContaining(['link', 'memory', 'profile', 'usage']));
+  });
+
+  it('link declares add/verify/remove subcommands', () => {
+    const payload = commandRegistrationPayloads.find((p) => p.name === 'link');
+    const subs = (payload?.options ?? []).map((o) => o.name);
+    expect(subs).toEqual(['add', 'verify', 'remove']);
+  });
+
   it('exports Discord registration payloads with the expected option shapes', () => {
     expect(registeredCommands.every((command) => typeof command.data.toJSON === 'function')).toBe(true);
-    expect(commandRegistrationPayloads).toHaveLength(7);
+    expect(commandRegistrationPayloads).toHaveLength(10);
 
     const price = commandRegistrationPayloads.find((c) => c.name === 'price');
     expect(price?.options).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'item', required: true })]));
@@ -108,8 +124,8 @@ describe('command registry', () => {
 
   it('leaves not-yet-wired commands on a placeholder response', async () => {
     const commands = buildRegistry(fakeRegistryDeps());
-    const usage = commands.find((c) => c.data.name === 'usage');
-    const response = await usage!.execute({ interaction: { commandName: 'usage' } as never });
+    const setup = commands.find((c) => c.data.name === 'setup');
+    const response = await setup!.execute({ interaction: { commandName: 'setup' } as never });
     expect(response).toEqual(expect.objectContaining({ ephemeral: true, content: expect.stringContaining('not wired') }));
   });
 });
