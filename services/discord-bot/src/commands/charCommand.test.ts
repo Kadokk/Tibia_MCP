@@ -10,6 +10,11 @@ const character = (overrides: Partial<CharacterInfo> = {}): CharacterInfo => ({
   residence: 'Thais',
   lastLogin: '2026-05-30T10:00:00Z',
   deaths: [],
+  guildName: null,
+  guildRank: null,
+  accountStatus: 'Free Account',
+  comment: null,
+  achievementPoints: 0,
   ...overrides
 });
 

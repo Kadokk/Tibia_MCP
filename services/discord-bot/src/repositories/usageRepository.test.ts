@@ -7,11 +7,14 @@ describe('UsageRepository', () => {
     const db = { query: vi.fn().mockResolvedValue([]) };
     const repo = new UsageRepository(db as unknown as DbClient);
 
-    await repo.recordAiQuestion({ discordUserId: 'u1', inputTokens: 1200, outputTokens: 300, costUsdMicros: 4200 });
+    await repo.recordAiQuestion({
+      discordUserId: 'u1', inputTokens: 1200, outputTokens: 300,
+      cacheCreationTokens: 4100, cacheReadTokens: 3900, costUsdMicros: 4200
+    });
 
     expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO ai_usage'),
-      ['u1', 1200, 300, 4200],
+      expect.stringContaining('cache_creation_tokens'),
+      ['u1', 1200, 300, 4100, 3900, 4200],
     );
   });
 

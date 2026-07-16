@@ -6,9 +6,18 @@ import { executeCharCommand } from './charCommand';
 import { executeBoostedCommand } from './boostedCommand';
 import { executePriceCommand } from './priceCommand';
 import { executeAuctionCommand } from './auctionCommand';
+import { executeLinkCommand } from './linkCommand';
+import { executeMemoryCommand } from './memoryCommand';
+import { executeProfileCommand } from './profileCommand';
+import { executeUsageCommand } from './usageCommand';
 import type { McpBridge } from '../mcp/mcpClient';
 import type { TibiaDataClient } from '../sources/tibiaDataClient';
 import type { AccessLimitsService } from '../services/accessLimits';
+import type { LinkService } from '../services/linkService';
+import type { MemoryRepository } from '../repositories/memoryRepository';
+import type { CaptureRepository } from '../repositories/captureRepository';
+import type { LinkedCharacterRepository } from '../repositories/linkedCharacterRepository';
+import type { CharacterSnapshotRepository } from '../repositories/characterSnapshotRepository';
 
 async function placeholderExecute(context: CommandContext): Promise<CommandResponse> {
   return createTextResponse(`/${context.interaction.commandName} is not wired to services yet.`, true);
@@ -74,7 +83,26 @@ const commandData: CommandData[] = [
     .addStringOption((option) => option
       .setName('world')
       .setDescription('Game world, e.g. Antica')
-      .setRequired(true))
+      .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('link')
+    .setDescription('Link your Tibia character to TibiaEdge.')
+    .addSubcommand((s) => s.setName('add').setDescription('Start linking a character')
+      .addStringOption((o) => o.setName('character').setDescription('Character name').setRequired(true)))
+    .addSubcommand((s) => s.setName('verify').setDescription('Verify a pending link via the character comment code')
+      .addStringOption((o) => o.setName('character').setDescription('Character name').setRequired(true)))
+    .addSubcommand((s) => s.setName('remove').setDescription('Remove a linked character')
+      .addStringOption((o) => o.setName('character').setDescription('Character name').setRequired(true))),
+  new SlashCommandBuilder()
+    .setName('memory')
+    .setDescription('See or delete what TibiaEdge remembers about you.')
+    .addSubcommand((s) => s.setName('show').setDescription('Show your stored memories'))
+    .addSubcommand((s) => s.setName('forget').setDescription('Forget one memory fact')
+      .addIntegerOption((o) => o.setName('id').setDescription('Fact id from /memory show').setRequired(true)))
+    .addSubcommand((s) => s.setName('forget-all').setDescription('Delete EVERYTHING TibiaEdge knows about you')),
+  new SlashCommandBuilder()
+    .setName('profile')
+    .setDescription('Show your linked Tibia characters and sync status.')
 ];
 
 export const commandRegistrationPayloads: RESTPostAPIChatInputApplicationCommandsJSONBody[] = commandData.map((data) => data.toJSON());
@@ -90,10 +118,16 @@ export type RegistryDeps = AskCommandDeps & {
   access: Pick<AccessLimitsService, 'canUseCommand'>;
   mcp: Pick<McpBridge, 'callTool'>;
   tibiaData: Pick<TibiaDataClient, 'getCharacter' | 'getBoosted'>;
+  linkService: Pick<LinkService, 'add' | 'verify' | 'remove'>;
+  memory: Pick<MemoryRepository, 'listActiveFacts' | 'deactivateFact' | 'forgetEverything'>;
+  captures: Pick<CaptureRepository, 'append' | 'countForUser'>;
+  links: Pick<LinkedCharacterRepository, 'listForUser' | 'countForUser'>;
+  snapshots: Pick<CharacterSnapshotRepository, 'latestForLink'>;
 };
 
 // Real registry with dependency-injected executes. ask/char/boosted/price/auction
-// are fully wired; setup/usage keep placeholders until their own tasks.
+// and the phase-2 link/memory/profile/usage commands are fully wired; setup keeps
+// its placeholder until its own task.
 export function buildRegistry(deps: RegistryDeps): BotCommand[] {
   const rateLimiter = createRateLimiter();
 
@@ -131,6 +165,14 @@ export function buildRegistry(deps: RegistryDeps): BotCommand[] {
             mcp: deps.mcp
           })
         };
+      case 'link':
+        return { data, execute: (ctx: CommandContext) => executeLinkCommand({ interaction: ctx.interaction, linkService: deps.linkService }) };
+      case 'memory':
+        return { data, execute: (ctx: CommandContext) => executeMemoryCommand({ interaction: ctx.interaction, memory: deps.memory, captures: deps.captures }) };
+      case 'profile':
+        return { data, execute: (ctx: CommandContext) => executeProfileCommand({ interaction: ctx.interaction, links: deps.links, snapshots: deps.snapshots }) };
+      case 'usage':
+        return { data, execute: (ctx: CommandContext) => executeUsageCommand({ interaction: ctx.interaction, tiers: deps.tiers, usage: deps.usage, links: deps.links }) };
       default:
         return { data, execute: placeholderExecute };
     }

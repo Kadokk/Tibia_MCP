@@ -89,3 +89,19 @@ Once §1–§3 are all confirmed/actioned, the human operator tags the release:
 git tag v0.2.0-beta
 git log --oneline -20
 ```
+
+## Phase 2 verification
+
+Phase 2 (identity & context — linked characters, per-user `/ask` personalization, profile
+sync, and `/memory`) landed on `feat/v2-second-brain`. All TS unit/structural tests,
+typecheck, lint, and the C++ suite are green and verified firsthand (see `git log` on that
+branch for the task-by-task history). The live smoke below needs a running bot on a real
+test guild, a live Postgres, Docker, and a Tibia character you control, so it is left for the
+deploy operator (append-only; do not reorder the Phase 1 items above).
+
+1. `docker compose up --build` — boot log shows `Applied migrations: 003_second_brain_core.sql`.
+2. In the test guild: `/link add character:<your char>` → put the code in the character comment on tibia.com → wait ~5 min → `/link verify` → ✅.
+3. Wait for the first sync tick (≤5 min) → `/profile` shows level/vocation.
+4. `/ask where should I hunt right now?` → answer references your real level/vocation/world.
+5. From a second (unlinked) Discord account: same question → generic answer; compare `ai_usage.cache_read_tokens` for both users across two consecutive questions — the unlinked user's cache behavior matches pre-phase-2.
+6. `/memory show` → captures counted; `/memory forget-all` → confirm → re-run `/memory show` → empty; check DB: zero rows for the user in all seven tables.

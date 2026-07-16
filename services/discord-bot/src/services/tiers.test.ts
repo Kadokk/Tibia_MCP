@@ -35,6 +35,14 @@ describe('getTierLimits', () => {
     expect(getTierLimits('free').commandsPerDay).toBe(500);
   });
 
+  it('caps linked characters per tier', () => {
+    expect(getTierLimits('free').linkedCharacters).toBe(1);
+    expect(getTierLimits('pro').linkedCharacters).toBe(5);
+    expect(getTierLimits('guild_pro').linkedCharacters).toBe(5);
+    expect(getTierLimits('admin').linkedCharacters).toBe(Number.MAX_SAFE_INTEGER);
+    expect(getTierLimits('disabled').linkedCharacters).toBe(0);
+  });
+
   it('returns frozen copies to prevent tier limit mutation', () => {
     const limits = getTierLimits('free');
     expect(Object.isFrozen(limits)).toBe(true);
