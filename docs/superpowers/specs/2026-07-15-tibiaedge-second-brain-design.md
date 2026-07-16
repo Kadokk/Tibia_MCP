@@ -76,7 +76,7 @@ Obsidian was evaluated as a backend and rejected: it is a single-user desktop ap
 1. Enumerate quest pages via MediaWiki API (`Category:Quest_Overview_Pages`, ~450 pages).
 2. Fetch wikitext per page; parse `{{Infobox Quest}}` (level requirements, premium, location, rewards, dangers).
 3. Fetch `/Spoiler` subpages; extract structure only. A one-off Haiku pass (~$0.50 total) rewrites step gists **in our own words** — CC BY-SA safe; answers link the wiki page for full prose and carry visible attribution.
-4. Upsert into `quests` keyed by slug; `source_revision` skips unchanged pages on refresh.
+4. Upsert into `quests` keyed by slug; `source_revision` skips unchanged pages on refresh. The infobox rewards field populates `quests.achievement_names` — achievement→quest inference derives from it, so no second curated map is needed.
 
 Politeness: descriptive User-Agent, 1 request per 2 seconds, exponential backoff. The corpus lives in Postgres, so runtime never touches Fandom; the existing C++ `search_quest` remains a degraded fallback. A hand-curated map ties ~50 bazaar "Completed Quest Lines" labels to quest slugs for auction seeding.
 
@@ -112,8 +112,8 @@ Politeness: descriptive User-Agent, 1 request per 2 seconds, exponential backoff
 ## Testing
 
 - **vitest:** every new repository asserts user-scoping on all queries; table-driven eligibility cases; distiller op application and sanitizer; context-builder token-budget truncation; importer against committed wikitext fixtures.
-- **Golden-set eval** (live Haiku + replayed tool fixtures, new `eval/userFixtures.json` rendered through the real `playerContextService`): personalized-answer cases, isolation cases, poisoning cases, continuity cases. The run also reports the cache-read ratio with a failure threshold.
-- **Integration:** a real-Postgres test that `/memory forget everything` leaves zero rows in every user-scoped table. C++ gtest covers auction quest-line parsing.
+- **Golden-set eval** (live Haiku + replayed tool fixtures, new `eval/userFixtures.json` rendered through the real `playerContextService`): personalized-answer cases, isolation cases, poisoning cases, continuity cases, and tier-gating cases (a free user's `remember` call returns the dispatcher's "premium feature" result; a free user's dynamic block contains no facts or goals). The run also reports the cache-read ratio with a failure threshold.
+- **Integration:** a real-Postgres test that `/memory forget everything` leaves zero rows in every user-scoped table. C++ gtest covers auction quest-line and achievement parsing.
 
 ## Non-goals (v2)
 
