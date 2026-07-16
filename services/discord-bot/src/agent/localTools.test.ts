@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createToolRouter, localToolDefs, PREMIUM_MEMORY_MESSAGE } from './localTools';
 
+const QUEST = {
+  id: 7, slug: 'against-the-spider-cult-quest', title: 'Against the Spider Cult Quest',
+  quest_line_label: 'Tibia Tales', min_level: 42, rec_level: 45, premium: true,
+  location: 'Edron Orc Cave', legend: 'The orcs are breeding giant spiders.',
+  rewards_json: ['Terra Amulet'], dangers_json: ['Giant Spider'], requirements_json: ['Shovel', 'Rope'],
+  steps_json: ['Ask Daniel Steelsoul in Edron for the mission'], achievement_names: [],
+  wiki_url: 'https://tibia.fandom.com/wiki/Against_the_Spider_Cult_Quest',
+  attribution: 'Content from TibiaWiki (tibia.fandom.com), CC BY-SA.', source_revision: 842642
+};
+
 function makeRouter(over: Record<string, unknown> = {}) {
   const deps = {
     mcp: { callTool: vi.fn().mockResolvedValue({ text: 'mcp result', isError: false }) },
@@ -10,15 +20,17 @@ function makeRouter(over: Record<string, unknown> = {}) {
       searchFacts: vi.fn().mockResolvedValue([{ id: 1, para_type: 'area', category: null, fact: 'Prefers solo hunts', source: 'user_stated', created_at: '' }])
     },
     captures: { append: vi.fn().mockResolvedValue(undefined) },
+    quests: { findByNameLoose: vi.fn().mockResolvedValue(QUEST) },
+    questEligibility: { check: vi.fn().mockResolvedValue({ kind: 'ok', eligible: true, reasons: [], quest: QUEST }) },
     ...over
   };
   return { deps, router: createToolRouter(deps as never) };
 }
 
 describe('localToolDefs', () => {
-  it('declares remember and recall_memory in stable order with schemas', () => {
-    expect(localToolDefs.map((t) => t.name)).toEqual(['remember', 'recall_memory']);
-    expect(localToolDefs[0].inputSchema).toMatchObject({ type: 'object' });
+  it('declares all four local tools in stable order, none exposing a user id', () => {
+    expect(localToolDefs.map((t) => t.name)).toEqual(['remember', 'recall_memory', 'get_quest_info', 'check_quest_eligibility']);
+    for (const def of localToolDefs) expect(JSON.stringify(def.inputSchema)).not.toMatch(/user/i);
   });
 });
 
@@ -82,5 +94,38 @@ describe('createToolRouter', () => {
     const r = await router.bind('u1', 'pro').callTool('recall_memory', { query: 'zzz' });
     expect(r.isError).toBe(false);
     expect(r.text.toLowerCase()).toContain('no stored');
+  });
+
+  it('get_quest_info renders requirements, steps, wiki link and attribution — free tier included', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_quest_info', { quest: 'spider cult' });
+    expect(deps.quests.findByNameLoose).toHaveBeenCalledWith('spider cult');
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain('level 42');
+    expect(r.text).toContain('Shovel');
+    expect(r.text).toContain('Daniel Steelsoul');
+    expect(r.text).toContain('https://tibia.fandom.com/wiki/Against_the_Spider_Cult_Quest');
+    expect(r.text).toContain('CC BY-SA');
+  });
+
+  it('get_quest_info: unknown quest → friendly no-match, not an error', async () => {
+    const { router } = makeRouter({ quests: { findByNameLoose: vi.fn().mockResolvedValue(null) } });
+    const r = await router.bind('u1', 'pro').callTool('get_quest_info', { quest: 'zzz' });
+    expect(r.isError).toBe(false);
+    expect(r.text.toLowerCase()).toContain('no quest');
+  });
+
+  it('check_quest_eligibility dispatches with the BOUND user id', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('check_quest_eligibility', { quest: 'Inquisition' });
+    expect(deps.questEligibility.check).toHaveBeenCalledWith('u1', 'Inquisition');
+    expect(r.text.toLowerCase()).toContain('eligible');
+  });
+
+  it('check_quest_eligibility relays no_character as a /link nudge', async () => {
+    const { router } = makeRouter({ questEligibility: { check: vi.fn().mockResolvedValue({ kind: 'no_character' }) } });
+    const r = await router.bind('u1', 'pro').callTool('check_quest_eligibility', { quest: 'Inquisition' });
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain('/link');
   });
 });
