@@ -16,4 +16,13 @@ describe('UserSettingsRepository', () => {
     const s = await new UserSettingsRepository(db as unknown as DbClient).getForUser('u1');
     expect(s).toEqual({ memoryEnabled: false, personalizeInGuilds: false });
   });
+
+  it('upserts a partial settings patch, preserving unset fields', async () => {
+    const db = fakeDb();
+    await new UserSettingsRepository(db as unknown as DbClient).upsert('u1', { memoryEnabled: false });
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('INSERT INTO user_settings');
+    expect(sql).toContain('COALESCE');
+    expect(params).toEqual(['u1', false, null]);
+  });
 });
