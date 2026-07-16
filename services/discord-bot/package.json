@@ -10,6 +10,7 @@
     "lint": "eslint src",
     "build": "tsc -p tsconfig.json",
     "eval": "tsx eval/run.ts",
+    "eval:prefix": "tsx eval/prefixTokens.ts",
     "eval:distill": "tsx eval/distill.ts",
     "import:quests": "tsx src/importers/runQuestImport.ts"
   },
