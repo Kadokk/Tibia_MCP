@@ -23,6 +23,8 @@ type GoldenCase = {
   expectRefusal: boolean;
   mustNotContain: string[];
   langMarkers: string[];
+  userFixture?: string;
+  mustContain?: string[];
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +32,7 @@ const repoRoot = resolve(here, '../../..');
 
 const golden = JSON.parse(readFileSync(resolve(here, 'golden.json'), 'utf8')) as { cases: GoldenCase[] };
 const fixtures = JSON.parse(readFileSync(resolve(here, 'toolFixtures.json'), 'utf8')) as Record<string, string>;
+const userFixtures = JSON.parse(readFileSync(resolve(here, 'userFixtures.json'), 'utf8')) as Record<string, string>;
 
 // --- assertion helpers ---------------------------------------------------
 
@@ -77,6 +80,11 @@ function makeFixtureBridge() {
     reset() {
       used.length = 0;
     },
+    // Seed grounding with non-tool context (e.g. the player-card fixture) so its
+    // numbers (level "250", etc.) don't get flagged as ungrounded in the answer.
+    seed(text: string) {
+      used.push(text);
+    },
     usedText(): string {
       return used.join('\n');
     },
@@ -97,6 +105,7 @@ type CaseResult = {
   langPass: boolean;
   refusePass: boolean;
   mncPass: boolean;
+  mcPass: boolean;
   groundingViolations: string[];
   tokens: number;
   costUsdMicros: number;
@@ -141,6 +150,8 @@ async function main(): Promise<void> {
 
   for (const c of cases) {
     fixtureBridge.reset();
+    const userContext = c.userFixture ? userFixtures[c.userFixture] : undefined;
+    if (userContext) fixtureBridge.seed(userContext);
     const caseStartedAt = Date.now();
     console.error(`[eval] → ${c.id} …`);
     try {
@@ -151,7 +162,8 @@ async function main(): Promise<void> {
           tools,
           model,
           question: c.question,
-          askerName: 'EvalRunner'
+          askerName: 'EvalRunner',
+          userContext
         }),
         CASE_TIMEOUT_MS,
         c.id
@@ -166,6 +178,9 @@ async function main(): Promise<void> {
       const lowerAnswer = answer.toLowerCase();
       const mncPass = !c.mustNotContain.some((s) => lowerAnswer.includes(s.toLowerCase()));
 
+      // (5) mustContain: every required substring is present (personalization proof)
+      const mcPass = (c.mustContain ?? []).every((s) => lowerAnswer.includes(s.toLowerCase()));
+
       // (3) refusal: no tool-derived numbers leaked, and short
       const hasBigNumber = /\d[\d.,]*/.test(answer) && groundingNumbers(answer).length > 0;
       const refusePass = c.expectRefusal ? !hasBigNumber && answer.length <= REFUSAL_MAX_CHARS : true;
@@ -174,12 +189,13 @@ async function main(): Promise<void> {
       const usedNumbers = new Set(groundingNumbers(fixtureBridge.usedText()));
       const groundingViolations = groundingNumbers(answer).filter((n) => !usedNumbers.has(n));
 
-      const hardFail = !langPass || !refusePass || !mncPass;
+      const hardFail = !langPass || !refusePass || !mncPass || !mcPass;
       results.push({
         id: c.id,
         langPass,
         refusePass,
         mncPass,
+        mcPass,
         groundingViolations,
         tokens: result.inputTokens + result.outputTokens,
         costUsdMicros: result.costUsdMicros,
@@ -192,6 +208,7 @@ async function main(): Promise<void> {
         langPass: false,
         refusePass: false,
         mncPass: false,
+        mcPass: false,
         groundingViolations: [],
         tokens: 0,
         costUsdMicros: 0,
@@ -203,12 +220,12 @@ async function main(): Promise<void> {
 
   // --- report ---
   const yn = (b: boolean): string => (b ? 'PASS' : 'FAIL');
-  console.log('\nid                 | lang | refuse | mnc  | ground | tokens | cost($)');
-  console.log('-------------------+------+--------+------+--------+--------+--------');
+  console.log('\nid                 | lang | refuse | mnc  | mc   | ground | tokens | cost($)');
+  console.log('-------------------+------+--------+------+------+--------+--------+--------');
   for (const r of results) {
     const ground = r.groundingViolations.length === 0 ? ' ok ' : `warn`;
     console.log(
-      `${r.id.padEnd(18)} | ${yn(r.langPass)} | ${yn(r.refusePass).padEnd(6)} | ${yn(r.mncPass).padEnd(4)} | ${ground.padEnd(6)} | ${String(r.tokens).padStart(6)} | ${(r.costUsdMicros / 1_000_000).toFixed(4)}`
+      `${r.id.padEnd(18)} | ${yn(r.langPass)} | ${yn(r.refusePass).padEnd(6)} | ${yn(r.mncPass).padEnd(4)} | ${yn(r.mcPass).padEnd(4)} | ${ground.padEnd(6)} | ${String(r.tokens).padStart(6)} | ${(r.costUsdMicros / 1_000_000).toFixed(4)}`
     );
     if (r.error) console.log(`   ! error: ${r.error}`);
     if (r.groundingViolations.length) console.log(`   ! ungrounded numbers: ${r.groundingViolations.join(', ')}`);
@@ -216,7 +233,7 @@ async function main(): Promise<void> {
 
   const totalMicros = results.reduce((sum, r) => sum + r.costUsdMicros, 0);
   const hardFails = results.filter((r) => r.hardFail);
-  console.log('-------------------+------+--------+------+--------+--------+--------');
+  console.log('-------------------+------+--------+------+------+--------+--------+--------');
   console.log(`Total cost: $${(totalMicros / 1_000_000).toFixed(4)} over ${results.length} cases`);
   console.log(`Hard failures: ${hardFails.length}${hardFails.length ? ' (' + hardFails.map((r) => r.id).join(', ') + ')' : ''}`);
 

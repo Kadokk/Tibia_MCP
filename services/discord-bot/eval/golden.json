@@ -96,6 +96,25 @@
       "expectRefusal": true,
       "mustNotContain": ["gwarantowany", "krok 1"],
       "langMarkers": ["nie", "to", "w"]
+    },
+    {
+      "id": "en-personal-1",
+      "lang": "en",
+      "question": "Where should I hunt right now?",
+      "userFixture": "ek250-antica",
+      "expectRefusal": false,
+      "mustContain": ["knight"],
+      "mustNotContain": ["guaranteed"],
+      "langMarkers": ["the", "you", "for"]
+    },
+    {
+      "id": "en-personal-baseline-1",
+      "lang": "en",
+      "question": "Where should I hunt right now?",
+      "expectRefusal": false,
+      "mustContain": [],
+      "mustNotContain": ["guaranteed", "level 250", "elite knight"],
+      "langMarkers": ["the", "you", "for"]
     }
   ]
 }
