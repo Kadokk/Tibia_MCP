@@ -3,7 +3,7 @@ import { SYSTEM_PROMPT } from './systemPrompt';
 import { costUsdMicros } from './pricing';
 import type { McpBridge, McpToolDef } from '../mcp/mcpClient';
 
-export type AskResult = { text: string; inputTokens: number; outputTokens: number; costUsdMicros: number; rounds: number };
+export type AskResult = { text: string; inputTokens: number; outputTokens: number; cacheCreationTokens: number; cacheReadTokens: number; costUsdMicros: number; rounds: number };
 
 const MAX_ROUNDS = 8;
 const MAX_TOKENS = 1024;
@@ -21,12 +21,20 @@ export async function runAsk(deps: {
   model: string;
   question: string;
   askerName: string;
+  userContext?: string | null;
 }): Promise<AskResult> {
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: `${deps.askerName} asks: ${deps.question}` }];
   let inputTokens = 0,
     outputTokens = 0,
+    cacheCreation = 0,
+    cacheRead = 0,
     micros = 0,
     rounds = 0;
+
+  // Static (cache-stable) system prefix built once; a per-user block is appended
+  // only when present so unlinked users' requests stay byte-identical to Phase 1.
+  const system: Anthropic.TextBlockParam[] = [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }];
+  if (deps.userContext) system.push({ type: 'text', text: deps.userContext, cache_control: { type: 'ephemeral' } });
 
   // Opt-in round tracing (silent unless AGENT_TRACE=1) — lets the eval harness see
   // exactly which round a live messages.create() call stalls in.
@@ -39,12 +47,14 @@ export async function runAsk(deps: {
     const response = await deps.anthropic.messages.create({
       model: deps.model,
       max_tokens: MAX_TOKENS,
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      system,
       tools: deps.tools,
       messages
     });
     trace?.(`round ${rounds}: ${response.stop_reason} in ${Date.now() - roundStartedAt}ms`);
     inputTokens += response.usage.input_tokens + (response.usage.cache_creation_input_tokens ?? 0) + (response.usage.cache_read_input_tokens ?? 0);
+    cacheCreation += response.usage.cache_creation_input_tokens ?? 0;
+    cacheRead += response.usage.cache_read_input_tokens ?? 0;
     outputTokens += response.usage.output_tokens;
     micros += costUsdMicros(response.usage);
 
@@ -53,7 +63,7 @@ export async function runAsk(deps: {
         .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map((b) => b.text)
         .join('\n');
-      return { text: text || 'I could not produce an answer.', inputTokens, outputTokens, costUsdMicros: micros, rounds };
+      return { text: text || 'I could not produce an answer.', inputTokens, outputTokens, cacheCreationTokens: cacheCreation, cacheReadTokens: cacheRead, costUsdMicros: micros, rounds };
     }
 
     messages.push({ role: 'assistant', content: response.content });
@@ -69,5 +79,5 @@ export async function runAsk(deps: {
     }
     messages.push({ role: 'user', content: results });
   }
-  return { text: 'I ran out of steps answering that — try a more specific question.', inputTokens, outputTokens, costUsdMicros: micros, rounds };
+  return { text: 'I ran out of steps answering that — try a more specific question.', inputTokens, outputTokens, cacheCreationTokens: cacheCreation, cacheReadTokens: cacheRead, costUsdMicros: micros, rounds };
 }

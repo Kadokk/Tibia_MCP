@@ -162,4 +162,40 @@ describe('runAsk', () => {
     expect(result.text).toBe('I could not produce an answer.');
     expect(result.rounds).toBe(1);
   });
+
+  it('sends exactly the static system block when no userContext is given (cache-stable)', async () => {
+    const { anthropic, create } = fakeAnthropic(
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 10, output_tokens: 5 } }
+    );
+    const { mcp } = fakeMcp();
+    await runAsk({ anthropic, mcp, tools: [], ...baseDeps });
+
+    const system = create.mock.calls[0][0].system;
+    expect(system).toHaveLength(1);
+    expect(system[0].cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('appends userContext as a second system block after the cached static block', async () => {
+    const { anthropic, create } = fakeAnthropic(
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 10, output_tokens: 5 } }
+    );
+    const { mcp } = fakeMcp();
+    await runAsk({ anthropic, mcp, tools: [], ...baseDeps, userContext: 'PLAYER NOTES — test' });
+
+    const system = create.mock.calls[0][0].system;
+    expect(system).toHaveLength(2);
+    expect(system[0].text).toBe(SYSTEM_PROMPT); // static block untouched
+    expect(system[1].text).toBe('PLAYER NOTES — test');
+    expect(system[1].cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('accumulates cache creation/read tokens into the result', async () => {
+    const { anthropic } = fakeAnthropic(
+      { stop_reason: 'end_turn', content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 500, cache_read_input_tokens: 4000 } }
+    );
+    const { mcp } = fakeMcp();
+    const r = await runAsk({ anthropic, mcp, tools: [], ...baseDeps });
+    expect(r.cacheCreationTokens).toBe(500);
+    expect(r.cacheReadTokens).toBe(4000);
+  });
 });
