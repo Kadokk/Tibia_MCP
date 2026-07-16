@@ -59,6 +59,22 @@ describe('parseEnv', () => {
     expect(env.distillTickMs).toBe(300_000);
   });
 
+  const inlineValidEnvObject = {
+    DISCORD_TOKEN: 'token',
+    DISCORD_CLIENT_ID: '123456789012345678',
+    DATABASE_URL: 'postgres://user:password@localhost:5432/db',
+    ANTHROPIC_API_KEY: 'sk-ant-test',
+    MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
+  };
+
+  it('defaults QUEST_IMPORT_TICK_MS to 7 days and QUEST_IMPORT_ENABLED to true', () => {
+    expect(parseEnv(inlineValidEnvObject).questImportTickMs).toBe(604_800_000);
+    expect(parseEnv(inlineValidEnvObject).questImportEnabled).toBe(true);
+  });
+  it('parses QUEST_IMPORT_ENABLED=false as a kill switch', () => {
+    expect(parseEnv({ ...inlineValidEnvObject, QUEST_IMPORT_ENABLED: 'false' }).questImportEnabled).toBe(false);
+  });
+
   it('rejects missing required values', () => {
     expect(() => parseEnv({})).toThrow(/DISCORD_TOKEN/);
   });
