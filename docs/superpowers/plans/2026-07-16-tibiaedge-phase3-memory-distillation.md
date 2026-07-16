@@ -1825,3 +1825,5 @@ console.log('PASS');
 - Retry/backoff for `failed` captures, `last_used_at` bookkeeping, entity garbage collection — YAGNI until something reads them.
 - Any per-user/per-tier variation of the static prefix (tool list or system prompt) — dispatcher-only gating, always.
 
+**Lesson for Phase 6 (golden-set growth):** function-word-only `langMarkers` (e.g. "the", "you", "to") fail ~5-15% of live runs on short model replies — hit this pattern 4 times across Tasks 14 and 16 (en-gating-1, pt-auction-1, en-memory-write-1, en-continuity-1), all confirmed as marker brittleness, not semantic failures (the accompanying `mustContain`/`mustCallTool` assertions passed every time). When growing the set to 30-50 cases, use content-word markers from the start (topic nouns/verbs specific to the question) rather than common function words.
+

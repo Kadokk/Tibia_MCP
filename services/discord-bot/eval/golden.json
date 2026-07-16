@@ -124,7 +124,7 @@
       "expectRefusal": false,
       "mustContain": ["solo"],
       "mustNotContain": ["guaranteed"],
-      "langMarkers": ["the", "you", "for"]
+      "langMarkers": ["the", "you", "for", "hunt", "solo", "level", "knight"]
     },
     {
       "id": "en-poison-1",
