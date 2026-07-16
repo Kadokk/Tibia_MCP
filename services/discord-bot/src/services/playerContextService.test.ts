@@ -17,6 +17,8 @@ const goalRow = (over: Partial<Record<string, unknown>> = {}) => ({
   id: 2, para_type: 'project', category: 'goal', fact: 'Wants to reach level 300', source: 'user_stated', created_at: '', ...over
 });
 
+const trackedRow = { quest_id: 7, title: 'Against the Spider Cult Quest', status: 'tracked', source: 'self_report', confidence: 1, min_level: 42, wiki_url: 'https://…' };
+
 const makeService = (rows: unknown[], over: Record<string, unknown> = {}) =>
   new PlayerContextService({
     snapshots: { latestForUser: vi.fn().mockResolvedValue(rows) } as never,
@@ -24,6 +26,7 @@ const makeService = (rows: unknown[], over: Record<string, unknown> = {}) =>
     tiers: { getTier: vi.fn().mockResolvedValue('free') } as never,
     memory: { topRankedFacts: vi.fn().mockResolvedValue([]), listGoals: vi.fn().mockResolvedValue([]) } as never,
     captures: { recentQaGists: vi.fn().mockResolvedValue([]) } as never,
+    quests: { listProgressForUser: vi.fn().mockResolvedValue([]) } as never,
     ...over
   });
 
@@ -115,5 +118,24 @@ describe('PlayerContextService', () => {
     });
     const ctx = await svc.buildUserContext('u1', { inGuild: false });
     expect((ctx ?? '').length).toBeLessThanOrEqual(3600);
+  });
+
+  it('free tier: tracked quests render (spec: player card + tracked quests)', async () => {
+    const svc = makeService([snapshotRow()], { quests: { listProgressForUser: vi.fn().mockResolvedValue([trackedRow]) } as never });
+    const ctx = await svc.buildUserContext('u1', { inGuild: false });
+    expect(ctx).toContain('Tracked quests:');
+    expect(ctx).toContain('Against the Spider Cult Quest');
+    expect(ctx).not.toContain('Known facts');
+  });
+
+  it('seeded progress is marked guessed in the block', async () => {
+    const svc = makeService([snapshotRow()], { quests: { listProgressForUser: vi.fn().mockResolvedValue([{ ...trackedRow, source: 'auction_seed', status: 'done' }]) } as never });
+    await expect(svc.buildUserContext('u1', { inGuild: false })).resolves.toContain('guessed');
+  });
+
+  it('asks for tracked/in_progress rows only, scoped to the user, capped at 5', async () => {
+    const quests = { listProgressForUser: vi.fn().mockResolvedValue([]) };
+    await makeService([snapshotRow()], { quests: quests as never }).buildUserContext('u1', { inGuild: false });
+    expect(quests.listProgressForUser).toHaveBeenCalledWith('u1', ['tracked', 'in_progress'], 5);
   });
 });

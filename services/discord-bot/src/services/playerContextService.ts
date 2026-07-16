@@ -3,6 +3,7 @@ import type { UserSettingsRepository } from '../repositories/userSettingsReposit
 import type { UserTierRepository } from '../repositories/userTierRepository';
 import type { MemoryRepository } from '../repositories/memoryRepository';
 import type { CaptureRepository } from '../repositories/captureRepository';
+import type { QuestRepository } from '../repositories/questRepository';
 import { getTierLimits } from './tiers';
 
 export const PLAYER_NOTES_HEADER =
@@ -33,6 +34,7 @@ export class PlayerContextService {
     tiers: Pick<UserTierRepository, 'getTier'>;
     memory: Pick<MemoryRepository, 'topRankedFacts' | 'listGoals'>;
     captures: Pick<CaptureRepository, 'recentQaGists'>;
+    quests: Pick<QuestRepository, 'listProgressForUser'>;
   }) {}
 
   /**
@@ -61,6 +63,14 @@ export class PlayerContextService {
       if (facts.length) lines.push('Known facts about this player:', ...facts.map((f) => `- ${f.fact}`));
       if (goals.length) lines.push('Player goals:', ...goals.map((g) => `- ${g.fact}`));
       if (gists.length) lines.push('Recent conversation (newest first):', ...gists.map((g) => `- ${g.replace(/\n/g, ' ').slice(0, 200)}`));
+    }
+
+    // Tracked quests render for ALL tiers (memory stays premium) — appended after
+    // the premium block, so quests follow gists for premium users.
+    const tracked = await this.deps.quests.listProgressForUser(discordUserId, ['tracked', 'in_progress'], 5);
+    if (tracked.length) {
+      lines.push('Tracked quests:', ...tracked.map((t) =>
+        `- ${t.title} (${t.status}${t.source !== 'self_report' ? ', guessed' : ''}${t.min_level ? `, min level ${t.min_level}` : ''})`));
     }
 
     if (lines.length === 1) return null;   // header alone = nothing to say; keep the cache-stable null path
