@@ -4,10 +4,14 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 export type McpToolDef = { name: string; description: string; inputSchema: Record<string, unknown> };
 export type McpToolResult = { text: string; isError: boolean };
 
-type CallableClient = Pick<Client, 'callTool' | 'listTools'>;
+type CallableClient = Pick<Client, 'callTool' | 'listTools' | 'close'>;
 
 export class McpBridge {
   constructor(private readonly client: CallableClient) {}
+
+  async close(): Promise<void> {
+    await this.client.close();
+  }
 
   async listTools(): Promise<McpToolDef[]> {
     const res = await this.client.listTools();
