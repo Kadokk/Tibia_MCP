@@ -8,9 +8,11 @@ import { parseEnv } from './config/env';
 import { createDbClient } from './db/client';
 import { loadMigrations, runMigrations } from './db/migrationRunner';
 import { runAsk, toAnthropicTools } from './agent/agentLoop';
+import { createToolRouter, localToolDefs } from './agent/localTools';
 import { connectMcp } from './mcp/mcpClient';
 import { startRefreshScheduler } from './scheduler/refreshScheduler';
 import { startProfileSyncScheduler } from './scheduler/profileSyncScheduler';
+import { startDistillScheduler } from './scheduler/distillScheduler';
 import { createTibiaDataClient } from './sources/tibiaDataClient';
 import { AccessLimitsService } from './services/accessLimits';
 import { UsageRepository } from './repositories/usageRepository';
@@ -20,9 +22,12 @@ import { CharacterSnapshotRepository } from './repositories/characterSnapshotRep
 import { CaptureRepository } from './repositories/captureRepository';
 import { UserSettingsRepository } from './repositories/userSettingsRepository';
 import { MemoryRepository } from './repositories/memoryRepository';
+import { EntityRepository } from './repositories/entityRepository';
 import { PlayerContextService } from './services/playerContextService';
+import { DistillService } from './services/distillService';
 import { LinkService } from './services/linkService';
 import { ProfileSyncService } from './services/profileSyncService';
+import type { Tier } from './services/tiers';
 import { createDiscordClient, startDiscordBot } from './discord/createClient';
 import { createInteractionDispatcher } from './discord/interactionDispatcher';
 
@@ -45,10 +50,6 @@ const mcp = await connectMcp(mcpCommand, mcpCwd);
 // A failed scrape is logged and swallowed, never crashing the bot.
 startRefreshScheduler(mcp, { intervalMs: 3_600_000 });
 
-// Fetch the tool list once at startup: it is stable, so reusing it keeps the
-// Anthropic prompt-cache prefix (system + tools) identical across questions.
-const tools = toAnthropicTools(await mcp.listTools());
-
 // Bound production requests: the SDK default is a 10-min timeout retried twice (~30 min),
 // which would blow past Discord's 15-min editReply window. A timed-out messages.create
 // rejects and ends the agent loop (retries can't stack across rounds, so worst case stays
@@ -64,17 +65,34 @@ const snapshots = new CharacterSnapshotRepository(db);
 const captures = new CaptureRepository(db);
 const settings = new UserSettingsRepository(db);
 const memory = new MemoryRepository(db);
-const context = new PlayerContextService({ snapshots, settings });
+const entities = new EntityRepository(db);
+const context = new PlayerContextService({ snapshots, settings, tiers, memory, captures });
 const linkService = new LinkService({ tibiaData, links: linkedChars, tiers });
 
 const profileSync = new ProfileSyncService({ links: linkedChars, snapshots, captures, tibiaData });
 startProfileSyncScheduler(profileSync, { tickMs: env.profileSyncTickMs });
 
-const ask = (question: string, askerName: string, userContext: string | null) =>
-  runAsk({ anthropic, mcp, tools, model: env.anthropicModel, question, askerName, userContext });
+// The tool router binds the Discord user id (and tier) at dispatch time — the id
+// is never a model-visible parameter — and satisfies runAsk's mcp.callTool dep.
+const router = createToolRouter({ mcp, memory, captures });
+
+// ONE merged, stable tool list: MCP defs then local defs, cache marker on the last.
+// Fetched once at startup so the Anthropic prompt-cache prefix (system + tools)
+// stays byte-identical across users, tiers, and questions.
+const tools = toAnthropicTools([...(await mcp.listTools()), ...localToolDefs]);
+
+const distill = new DistillService({
+  anthropic, captures, memory, entities, links: linkedChars, tiers, usage,
+  model: env.anthropicModel,
+  spendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000)
+});
+startDistillScheduler(distill, { tickMs: env.distillTickMs });
+
+const ask = (question: string, askerName: string, userContext: string | null, userId: string, tier: Tier) =>
+  runAsk({ anthropic, mcp: router.bind(userId, tier), tools, model: env.anthropicModel, question, askerName, userContext });
 
 const commands = buildRegistry({
-  access, usage, tiers, ask, context, captures,
+  access, usage, tiers, ask, context, captures, settings,
   dailySpendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000),
   mcp, tibiaData, linkService, memory, links: linkedChars, snapshots
 });

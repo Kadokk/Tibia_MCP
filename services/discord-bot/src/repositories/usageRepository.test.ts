@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { UsageRepository } from './usageRepository';
 import type { DbClient } from '../db/client';
 
+const fakeDb = (rows: unknown[] = []) => ({ query: vi.fn().mockResolvedValue(rows) });
+
 describe('UsageRepository', () => {
   it('increments ai usage with an upsert', async () => {
     const db = { query: vi.fn().mockResolvedValue([]) };
@@ -41,7 +43,7 @@ describe('UsageRepository', () => {
     const repo = new UsageRepository(db as unknown as DbClient);
 
     await expect(repo.globalSpendTodayUsdMicros()).resolves.toBe(0);
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('SUM(cost_usd_micros)'));
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('SUM(cost_usd_micros + distill_cost_usd_micros)'));
   });
 
   it('parses the summed spend text into a number', async () => {
@@ -49,5 +51,20 @@ describe('UsageRepository', () => {
     const repo = new UsageRepository(db as unknown as DbClient);
 
     await expect(repo.globalSpendTodayUsdMicros()).resolves.toBe(12345);
+  });
+
+  it('accumulates distill cost without counting a question', async () => {
+    const db = fakeDb();
+    await new UsageRepository(db as unknown as DbClient).recordDistillUsage('u1', 900);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('distill_cost_usd_micros');
+    expect(sql).toContain('VALUES ($1, CURRENT_DATE, 0, 0, 0, 0, 0, 0, $2)');
+    expect(params).toEqual(['u1', 900]);
+  });
+
+  it('global spend includes distillation cost', async () => {
+    const db = fakeDb([{ total: '123' }]);
+    await new UsageRepository(db as unknown as DbClient).globalSpendTodayUsdMicros();
+    expect(db.query.mock.calls[0][0]).toContain('cost_usd_micros + distill_cost_usd_micros');
   });
 });

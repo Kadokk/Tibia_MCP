@@ -142,7 +142,7 @@ describe('executeAskCommand', () => {
 
     expect(result).toBeNull();
     expect(interaction.deferReply).toHaveBeenCalled();
-    expect(deps.ask).toHaveBeenCalledWith('is this axe good?', 'Kad', null);
+    expect(deps.ask).toHaveBeenCalledWith('is this axe good?', 'Kad', null, 'u1', 'free');
     expect(deps.usage.recordAiQuestion).toHaveBeenCalledWith({
       discordUserId: 'u1',
       inputTokens: 10,
@@ -191,7 +191,7 @@ describe('executeAskCommand', () => {
 
     expect(result).toBeNull();
     expect(deps.context.buildUserContext).toHaveBeenCalledWith('u1', { inGuild: expect.any(Boolean) });
-    expect(deps.ask).toHaveBeenCalledWith('the question', expect.any(String), 'PLAYER NOTES — test');
+    expect(deps.ask).toHaveBeenCalledWith('the question', expect.any(String), 'PLAYER NOTES — test', 'u1', 'free');
     expect(deps.captures.append).toHaveBeenCalledWith(expect.objectContaining({ discordUserId: 'u1', kind: 'qa_turn' }));
   });
 
@@ -202,7 +202,7 @@ describe('executeAskCommand', () => {
 
     await run(interaction, deps);
 
-    expect(deps.ask).toHaveBeenCalledWith('the question', expect.any(String), null);
+    expect(deps.ask).toHaveBeenCalledWith('the question', expect.any(String), null, 'u1', 'free');
     expect(interaction.editReply).toHaveBeenCalledWith({ content: 'answer' });
   });
 

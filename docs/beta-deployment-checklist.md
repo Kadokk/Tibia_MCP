@@ -105,3 +105,22 @@ deploy operator (append-only; do not reorder the Phase 1 items above).
 4. `/ask where should I hunt right now?` → answer references your real level/vocation/world.
 5. From a second (unlinked) Discord account: same question → generic answer; compare `ai_usage.cache_read_tokens` for both users across two consecutive questions — the unlinked user's cache behavior matches pre-phase-2.
 6. `/memory show` → captures counted; `/memory forget-all` → confirm → re-run `/memory show` → empty; check DB: zero rows for the user in all seven tables.
+
+## Phase 3 verification
+
+Phase 3 (memory distillation & continuity — the capture distiller + 5-min scheduler,
+`remember`/`recall_memory` local tools, ranked-fact/goal/recent-gist context injection, and
+`/goals` + `/settings`) landed on `feat/v2-phase3-memory`. All TypeScript unit/structural
+tests, typecheck, lint, and the C++ suite are green and verified firsthand (see `git log` on
+that branch); no migration beyond 003. The live smoke below needs a running bot on a real
+test guild, a live Postgres, and Docker, so it is left for the deploy operator (append-only;
+do not reorder the items above).
+
+1. `docker compose up --build` — boot log shows the distill scheduler starting (no new migration expected).
+2. As a premium (admin-tier) test user in a DM: `/ask remember that I prefer solo EK hunts` → answer confirms.
+3. Restart the bot container. `/ask where should I hunt tonight?` → answer reflects the solo preference (exit criterion 1: memory survives restart).
+4. `/memory show` → the fact is listed with its id; `/goals set goal:Reach level 300` → `/goals list` shows it; a later `/ask` mentions it.
+5. Ask 2–3 questions, wait one distill tick (≤5 min), check `memory_facts` for distilled rows and `ai_usage.distill_cost_usd_micros` > 0; verify `captures.distill_status='done'`.
+6. From a free-tier account: `/ask remember that I like team hunts` → polite premium message; `memory_facts` has NO row for that user; `/goals set` → upsell reply.
+7. `/settings set setting:memory enabled:false` → `/ask` answers unpersonalized; re-enable and confirm personalization returns.
+8. `/memory forget-all` → confirm → zero rows for the user across all user-scoped tables (including `entities`/`relations`).

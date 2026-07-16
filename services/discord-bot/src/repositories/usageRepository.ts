@@ -21,6 +21,16 @@ export class UsageRepository {
     );
   }
 
+  /** Distillation is background spend: it meters cost but does not consume a question. */
+  async recordDistillUsage(discordUserId: string, costUsdMicros: number): Promise<void> {
+    await this.db.query(
+      `INSERT INTO ai_usage (discord_user_id, day, questions, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cost_usd_micros, distill_cost_usd_micros)
+       VALUES ($1, CURRENT_DATE, 0, 0, 0, 0, 0, 0, $2)
+       ON CONFLICT (discord_user_id, day) DO UPDATE SET
+         distill_cost_usd_micros = ai_usage.distill_cost_usd_micros + EXCLUDED.distill_cost_usd_micros`,
+      [discordUserId, costUsdMicros]);
+  }
+
   async aiQuestionsToday(discordUserId: string): Promise<number> {
     const rows = await this.db.query<{ questions: number }>(
       'SELECT questions FROM ai_usage WHERE discord_user_id = $1 AND day = CURRENT_DATE', [discordUserId]);
@@ -29,7 +39,7 @@ export class UsageRepository {
 
   async globalSpendTodayUsdMicros(): Promise<number> {
     const rows = await this.db.query<{ total: string | null }>(
-      'SELECT SUM(cost_usd_micros)::text AS total FROM ai_usage WHERE day = CURRENT_DATE');
+      'SELECT SUM(cost_usd_micros + distill_cost_usd_micros)::text AS total FROM ai_usage WHERE day = CURRENT_DATE');
     return Number(rows[0]?.total ?? 0);
   }
 }

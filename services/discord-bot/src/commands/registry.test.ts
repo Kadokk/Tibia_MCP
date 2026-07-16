@@ -23,7 +23,8 @@ function fakeRegistryDeps(): RegistryDeps {
       getBoosted: vi.fn().mockResolvedValue({ creatureName: 'Demon', bossName: 'Ferumbras' })
     },
     linkService: { add: vi.fn(), verify: vi.fn(), remove: vi.fn() },
-    memory: { listActiveFacts: vi.fn().mockResolvedValue([]), deactivateFact: vi.fn(), forgetEverything: vi.fn() },
+    memory: { listActiveFacts: vi.fn().mockResolvedValue([]), deactivateFact: vi.fn(), forgetEverything: vi.fn(), insertFact: vi.fn().mockResolvedValue(9), listGoals: vi.fn().mockResolvedValue([]), countActiveFacts: vi.fn().mockResolvedValue(0) },
+    settings: { getForUser: vi.fn().mockResolvedValue({ memoryEnabled: true, personalizeInGuilds: true }), upsert: vi.fn().mockResolvedValue(undefined) },
     links: { listForUser: vi.fn().mockResolvedValue([]), countForUser: vi.fn().mockResolvedValue(0) },
     snapshots: { latestForLink: vi.fn().mockResolvedValue(null) }
   };
@@ -52,6 +53,16 @@ describe('command registry', () => {
     expect(commandNames()).toEqual(expect.arrayContaining(['link', 'memory', 'profile', 'usage']));
   });
 
+  it('registers the phase-3 memory commands', () => {
+    expect(commandNames()).toEqual(expect.arrayContaining(['goals', 'settings']));
+  });
+
+  it('goals declares set/list/done subcommands', () => {
+    const payload = commandRegistrationPayloads.find((p) => p.name === 'goals');
+    const subs = (payload?.options ?? []).map((o) => o.name);
+    expect(subs).toEqual(['set', 'list', 'done']);
+  });
+
   it('link declares add/verify/remove subcommands', () => {
     const payload = commandRegistrationPayloads.find((p) => p.name === 'link');
     const subs = (payload?.options ?? []).map((o) => o.name);
@@ -60,7 +71,7 @@ describe('command registry', () => {
 
   it('exports Discord registration payloads with the expected option shapes', () => {
     expect(registeredCommands.every((command) => typeof command.data.toJSON === 'function')).toBe(true);
-    expect(commandRegistrationPayloads).toHaveLength(10);
+    expect(commandRegistrationPayloads).toHaveLength(12);
 
     const price = commandRegistrationPayloads.find((c) => c.name === 'price');
     expect(price?.options).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'item', required: true })]));

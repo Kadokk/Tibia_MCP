@@ -5,6 +5,7 @@ import type { UsageRepository } from '../repositories/usageRepository';
 import type { UserTierRepository } from '../repositories/userTierRepository';
 import type { PlayerContextService } from '../services/playerContextService';
 import type { CaptureRepository } from '../repositories/captureRepository';
+import type { Tier } from '../services/tiers';
 
 export type RateLimiter = { check(userId: string, now?: number): boolean };
 
@@ -35,7 +36,7 @@ export type AskCommandDeps = {
   tiers: Pick<UserTierRepository, 'getTier'>;
   context: Pick<PlayerContextService, 'buildUserContext'>;
   captures: Pick<CaptureRepository, 'append'>;
-  ask: (question: string, askerName: string, userContext: string | null) => Promise<AskResult>;
+  ask: (question: string, askerName: string, userContext: string | null, userId: string, tier: Tier) => Promise<AskResult>;
   dailySpendCapUsdMicros: number;
 };
 
@@ -77,7 +78,7 @@ export async function executeAskCommand(
     } catch (err) {
       console.error('player context failed, answering unpersonalized', err);
     }
-    const result = await input.ask(question, interaction.user.displayName ?? 'A player', userContext);
+    const result = await input.ask(question, interaction.user.displayName ?? 'A player', userContext, userId, tier);
     await input.usage.recordAiQuestion({
       discordUserId: userId, inputTokens: result.inputTokens, outputTokens: result.outputTokens,
       cacheCreationTokens: result.cacheCreationTokens, cacheReadTokens: result.cacheReadTokens,

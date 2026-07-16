@@ -10,6 +10,8 @@ import { executeLinkCommand } from './linkCommand';
 import { executeMemoryCommand } from './memoryCommand';
 import { executeProfileCommand } from './profileCommand';
 import { executeUsageCommand } from './usageCommand';
+import { executeGoalsCommand } from './goalsCommand';
+import { executeSettingsCommand } from './settingsCommand';
 import type { McpBridge } from '../mcp/mcpClient';
 import type { TibiaDataClient } from '../sources/tibiaDataClient';
 import type { AccessLimitsService } from '../services/accessLimits';
@@ -18,6 +20,7 @@ import type { MemoryRepository } from '../repositories/memoryRepository';
 import type { CaptureRepository } from '../repositories/captureRepository';
 import type { LinkedCharacterRepository } from '../repositories/linkedCharacterRepository';
 import type { CharacterSnapshotRepository } from '../repositories/characterSnapshotRepository';
+import type { UserSettingsRepository } from '../repositories/userSettingsRepository';
 
 async function placeholderExecute(context: CommandContext): Promise<CommandResponse> {
   return createTextResponse(`/${context.interaction.commandName} is not wired to services yet.`, true);
@@ -102,7 +105,23 @@ const commandData: CommandData[] = [
     .addSubcommand((s) => s.setName('forget-all').setDescription('Delete EVERYTHING TibiaEdge knows about you')),
   new SlashCommandBuilder()
     .setName('profile')
-    .setDescription('Show your linked Tibia characters and sync status.')
+    .setDescription('Show your linked Tibia characters and sync status.'),
+  new SlashCommandBuilder()
+    .setName('goals')
+    .setDescription('Track your Tibia goals (premium): they shape your /ask answers.')
+    .addSubcommand((s) => s.setName('set').setDescription('Add a goal')
+      .addStringOption((o) => o.setName('goal').setDescription('e.g. Reach level 300 by September').setRequired(true)))
+    .addSubcommand((s) => s.setName('list').setDescription('List your active goals'))
+    .addSubcommand((s) => s.setName('done').setDescription('Mark a goal as completed')
+      .addIntegerOption((o) => o.setName('id').setDescription('Goal id from /goals list').setRequired(true))),
+  new SlashCommandBuilder()
+    .setName('settings')
+    .setDescription('Your TibiaEdge privacy and memory settings.')
+    .addSubcommand((s) => s.setName('show').setDescription('Show your current settings'))
+    .addSubcommand((s) => s.setName('set').setDescription('Change a setting')
+      .addStringOption((o) => o.setName('setting').setDescription('Which setting').setRequired(true)
+        .addChoices({ name: 'memory', value: 'memory' }, { name: 'personalize-in-guilds', value: 'personalize-in-guilds' }))
+      .addBooleanOption((o) => o.setName('enabled').setDescription('on (true) or off (false)').setRequired(true)))
 ];
 
 export const commandRegistrationPayloads: RESTPostAPIChatInputApplicationCommandsJSONBody[] = commandData.map((data) => data.toJSON());
@@ -119,10 +138,11 @@ export type RegistryDeps = AskCommandDeps & {
   mcp: Pick<McpBridge, 'callTool'>;
   tibiaData: Pick<TibiaDataClient, 'getCharacter' | 'getBoosted'>;
   linkService: Pick<LinkService, 'add' | 'verify' | 'remove'>;
-  memory: Pick<MemoryRepository, 'listActiveFacts' | 'deactivateFact' | 'forgetEverything'>;
+  memory: Pick<MemoryRepository, 'listActiveFacts' | 'deactivateFact' | 'forgetEverything' | 'insertFact' | 'listGoals' | 'countActiveFacts'>;
   captures: Pick<CaptureRepository, 'append' | 'countForUser'>;
   links: Pick<LinkedCharacterRepository, 'listForUser' | 'countForUser'>;
   snapshots: Pick<CharacterSnapshotRepository, 'latestForLink'>;
+  settings: Pick<UserSettingsRepository, 'getForUser' | 'upsert'>;
 };
 
 // Real registry with dependency-injected executes. ask/char/boosted/price/auction
@@ -173,6 +193,10 @@ export function buildRegistry(deps: RegistryDeps): BotCommand[] {
         return { data, execute: (ctx: CommandContext) => executeProfileCommand({ interaction: ctx.interaction, links: deps.links, snapshots: deps.snapshots }) };
       case 'usage':
         return { data, execute: (ctx: CommandContext) => executeUsageCommand({ interaction: ctx.interaction, tiers: deps.tiers, usage: deps.usage, links: deps.links }) };
+      case 'goals':
+        return { data, execute: (ctx: CommandContext) => executeGoalsCommand({ interaction: ctx.interaction, tiers: deps.tiers, memory: deps.memory }) };
+      case 'settings':
+        return { data, execute: (ctx: CommandContext) => executeSettingsCommand({ interaction: ctx.interaction, settings: deps.settings }) };
       default:
         return { data, execute: placeholderExecute };
     }

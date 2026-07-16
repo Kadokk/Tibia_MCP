@@ -14,7 +14,8 @@ const envSchema = z.object({
   MCP_SERVER_CWD: z.string().trim().optional(),          // where its sqlite cache lives
   AI_DAILY_SPEND_CAP_USD: z.coerce.number().positive().default(0.7),
   TIBIADATA_BASE_URL: z.string().trim().url().default('https://api.tibiadata.com'),
-  PROFILE_SYNC_TICK_MS: z.coerce.number().int().positive().default(300_000)
+  PROFILE_SYNC_TICK_MS: z.coerce.number().int().positive().default(300_000),
+  DISTILL_TICK_MS: z.coerce.number().int().positive().default(300_000)
 });
 
 export type AppEnv = {
@@ -30,6 +31,7 @@ export type AppEnv = {
   aiDailySpendCapUsd: number;
   tibiaDataBaseUrl: string;
   profileSyncTickMs: number;
+  distillTickMs: number;
 };
 
 export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
@@ -46,6 +48,7 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     mcpServerCwd: parsed.MCP_SERVER_CWD,
     aiDailySpendCapUsd: parsed.AI_DAILY_SPEND_CAP_USD,
     tibiaDataBaseUrl: parsed.TIBIADATA_BASE_URL,
-    profileSyncTickMs: parsed.PROFILE_SYNC_TICK_MS
+    profileSyncTickMs: parsed.PROFILE_SYNC_TICK_MS,
+    distillTickMs: parsed.DISTILL_TICK_MS
   };
 }

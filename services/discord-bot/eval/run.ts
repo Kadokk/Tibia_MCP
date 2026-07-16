@@ -14,6 +14,8 @@ import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import Anthropic from '@anthropic-ai/sdk';
 import { runAsk, toAnthropicTools } from '../src/agent/agentLoop';
+import { createToolRouter, localToolDefs } from '../src/agent/localTools';
+import { PlayerContextService } from '../src/services/playerContextService';
 import { connectMcp, type McpToolResult } from '../src/mcp/mcpClient';
 
 type GoldenCase = {
@@ -25,6 +27,7 @@ type GoldenCase = {
   langMarkers: string[];
   userFixture?: string;
   mustContain?: string[];
+  mustCallTool?: string;
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +35,7 @@ const repoRoot = resolve(here, '../../..');
 
 const golden = JSON.parse(readFileSync(resolve(here, 'golden.json'), 'utf8')) as { cases: GoldenCase[] };
 const fixtures = JSON.parse(readFileSync(resolve(here, 'toolFixtures.json'), 'utf8')) as Record<string, string>;
-const userFixtures = JSON.parse(readFileSync(resolve(here, 'userFixtures.json'), 'utf8')) as Record<string, string>;
+const userFixtures = JSON.parse(readFileSync(resolve(here, 'userFixtures.json'), 'utf8')) as Record<string, UserFixture>;
 
 // --- assertion helpers ---------------------------------------------------
 
@@ -98,6 +101,41 @@ function makeFixtureBridge() {
   };
 }
 
+// --- user fixtures: rendered through the REAL context service ------------
+
+type UserFixture = { tier: 'free' | 'pro'; snapshots: unknown[]; facts: unknown[]; goals: unknown[]; gists: string[] };
+
+// Render the per-user system block through the same PlayerContextService the bot
+// uses in production, so the eval can never drift from the real block format.
+async function renderFixtureContext(f: UserFixture): Promise<string | null> {
+  const svc = new PlayerContextService({
+    snapshots: { latestForUser: async () => f.snapshots } as never,
+    settings: { getForUser: async () => ({ memoryEnabled: true, personalizeInGuilds: true }) } as never,
+    tiers: { getTier: async () => f.tier } as never,
+    memory: { topRankedFacts: async () => f.facts, listGoals: async () => f.goals } as never,
+    captures: { recentQaGists: async () => f.gists } as never
+  });
+  return svc.buildUserContext('eval-user', { inGuild: false });
+}
+
+// Per-case recording fake for the local memory tools, so remember/recall_memory
+// actually run in the eval (and we can assert the model called one).
+function makeLocalMemory(f: UserFixture | undefined) {
+  const calls: string[] = [];
+  const facts = (f?.facts ?? []) as Array<{ fact: string }>;
+  return {
+    calls,
+    deps: {
+      memory: {
+        insertFact: async () => { calls.push('remember'); return 99; },
+        countActiveFacts: async () => facts.length,
+        searchFacts: async (_u: string, q: string) => { calls.push('recall_memory'); return facts.filter((x) => x.fact.toLowerCase().includes(q.toLowerCase().split(' ')[0] ?? '')); }
+      },
+      captures: { append: async () => undefined }
+    }
+  };
+}
+
 // --- main ----------------------------------------------------------------
 
 type CaseResult = {
@@ -106,6 +144,7 @@ type CaseResult = {
   refusePass: boolean;
   mncPass: boolean;
   mcPass: boolean;
+  toolPass: boolean;
   groundingViolations: string[];
   tokens: number;
   costUsdMicros: number;
@@ -123,7 +162,7 @@ async function main(): Promise<void> {
   let tools: Anthropic.Tool[];
   try {
     const realBridge = await connectMcp(mcpCommand, repoRoot);
-    tools = toAnthropicTools(await realBridge.listTools());
+    tools = toAnthropicTools([...(await realBridge.listTools()), ...localToolDefs]);
     // Schemas fetched — release the tibia-mcp child so it doesn't linger for the whole
     // run and keep the process alive after the report prints.
     await realBridge.close();
@@ -139,6 +178,9 @@ async function main(): Promise<void> {
   const model = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5';
   const fixtureBridge = makeFixtureBridge();
   const results: CaseResult[] = [];
+  // Cache-read health across the whole run: prompt-cache hits vs all-in input.
+  let totalCacheRead = 0;
+  let totalAllInInput = 0;
 
   // Optional debug scoping: CASE_FILTER=en-auction-1,en-knowledge-1 runs just those cases.
   // Unset → all cases.
@@ -150,15 +192,17 @@ async function main(): Promise<void> {
 
   for (const c of cases) {
     fixtureBridge.reset();
-    const userContext = c.userFixture ? userFixtures[c.userFixture] : undefined;
+    const fixture = c.userFixture ? userFixtures[c.userFixture] : undefined;
+    const userContext = fixture ? await renderFixtureContext(fixture) : null;
     if (userContext) fixtureBridge.seed(userContext);
+    const local = makeLocalMemory(fixture);
     const caseStartedAt = Date.now();
     console.error(`[eval] → ${c.id} …`);
     try {
       const result = await withCaseTimeout(
         runAsk({
           anthropic,
-          mcp: fixtureBridge.bridge,
+          mcp: createToolRouter({ mcp: fixtureBridge.bridge, ...local.deps }).bind('eval-user', fixture?.tier ?? 'free'),
           tools,
           model,
           question: c.question,
@@ -189,13 +233,20 @@ async function main(): Promise<void> {
       const usedNumbers = new Set(groundingNumbers(fixtureBridge.usedText()));
       const groundingViolations = groundingNumbers(answer).filter((n) => !usedNumbers.has(n));
 
-      const hardFail = !langPass || !refusePass || !mncPass || !mcPass;
+      // (6) mustCallTool: the model actually invoked the required local tool
+      const toolPass = !c.mustCallTool || local.calls.includes(c.mustCallTool);
+
+      totalCacheRead += result.cacheReadTokens;
+      totalAllInInput += result.inputTokens;
+
+      const hardFail = !langPass || !refusePass || !mncPass || !mcPass || !toolPass;
       results.push({
         id: c.id,
         langPass,
         refusePass,
         mncPass,
         mcPass,
+        toolPass,
         groundingViolations,
         tokens: result.inputTokens + result.outputTokens,
         costUsdMicros: result.costUsdMicros,
@@ -209,6 +260,7 @@ async function main(): Promise<void> {
         refusePass: false,
         mncPass: false,
         mcPass: false,
+        toolPass: false,
         groundingViolations: [],
         tokens: 0,
         costUsdMicros: 0,
@@ -229,6 +281,7 @@ async function main(): Promise<void> {
     );
     if (r.error) console.log(`   ! error: ${r.error}`);
     if (r.groundingViolations.length) console.log(`   ! ungrounded numbers: ${r.groundingViolations.join(', ')}`);
+    if (!r.toolPass && !r.error) console.log(`   ! required memory tool was not called`);
   }
 
   const totalMicros = results.reduce((sum, r) => sum + r.costUsdMicros, 0);
@@ -236,6 +289,15 @@ async function main(): Promise<void> {
   console.log('-------------------+------+--------+------+------+--------+--------+--------');
   console.log(`Total cost: $${(totalMicros / 1_000_000).toFixed(4)} over ${results.length} cases`);
   console.log(`Hard failures: ${hardFails.length}${hardFails.length ? ' (' + hardFails.map((r) => r.id).join(', ') + ')' : ''}`);
+
+  // Prompt-cache health gate: if the static prefix (system + tools) is not being
+  // reused across cases, the cache-read ratio collapses.
+  const cacheRatio = totalCacheRead / Math.max(1, totalAllInInput);
+  // prefix ~2.4k tokens < Haiku's cacheable-prefix minimum; caching is inert until the
+  // tool surface grows (Phase 4 quest tools) — recalibrate then.
+  const minRatio = Number(process.env.EVAL_MIN_CACHE_RATIO ?? '0');
+  console.log(`Cache-read ratio: ${(cacheRatio * 100).toFixed(1)}% (threshold ${(minRatio * 100).toFixed(0)}%)`);
+  if (cacheRatio < minRatio) process.exitCode = 1;   // report still prints in full
 
   if (hardFails.length) process.exit(1);
 }

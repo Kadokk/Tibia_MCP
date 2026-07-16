@@ -47,6 +47,18 @@ describe('parseEnv', () => {
     expect(env.profileSyncTickMs).toBe(300_000);
   });
 
+  it('defaults DISTILL_TICK_MS to 5 minutes', () => {
+    const env = parseEnv({
+      DISCORD_TOKEN: 'token',
+      DISCORD_CLIENT_ID: '123456789012345678',
+      DATABASE_URL: 'postgres://user:password@localhost:5432/db',
+      ANTHROPIC_API_KEY: 'sk-ant-test',
+      MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
+    });
+
+    expect(env.distillTickMs).toBe(300_000);
+  });
+
   it('rejects missing required values', () => {
     expect(() => parseEnv({})).toThrow(/DISCORD_TOKEN/);
   });
