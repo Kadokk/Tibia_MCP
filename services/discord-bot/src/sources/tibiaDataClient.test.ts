@@ -53,7 +53,12 @@ describe('tibiaDataClient.getCharacter', () => {
       deaths: [
         { time: '2026-05-29T09:00:00Z', reason: 'Died by a demon.', level: 899 },
         { time: '2026-05-28T09:00:00Z', reason: 'Died by a dragon lord.', level: 898 }
-      ]
+      ],
+      guildName: null,
+      guildRank: null,
+      accountStatus: 'Free Account',
+      comment: null,
+      achievementPoints: 0
     });
   });
 
@@ -69,6 +74,41 @@ describe('tibiaDataClient.getCharacter', () => {
     const client = createTibiaDataClient({ baseUrl: BASE, fetch: fn });
 
     await expect(client.getCharacter('Bobeek')).rejects.toBeInstanceOf(TibiaDataError);
+  });
+
+  it('parses guild, account status, comment and achievement points', async () => {
+    const { fn } = fakeFetch({
+      '/v4/character/': {
+        body: characterBody({
+          name: 'Kadokk',
+          level: 247,
+          account_status: 'Premium Account',
+          comment: 'TIBIAEDGE-AB12CD fan of solo hunts',
+          achievement_points: 512,
+          guild: { name: 'Redemption', rank: 'Soldier' }
+        })
+      }
+    });
+    const client = createTibiaDataClient({ baseUrl: BASE, fetch: fn });
+
+    const info = await client.getCharacter('Kadokk');
+
+    expect(info?.guildName).toBe('Redemption');
+    expect(info?.guildRank).toBe('Soldier');
+    expect(info?.accountStatus).toBe('Premium Account');
+    expect(info?.comment).toContain('TIBIAEDGE-AB12CD');
+    expect(info?.achievementPoints).toBe(512);
+  });
+
+  it('getCharacterRaw returns both parsed info and the raw payload', async () => {
+    const body = characterBody({ name: 'Kadokk', level: 247 });
+    const { fn } = fakeFetch({ '/v4/character/': { body } });
+    const client = createTibiaDataClient({ baseUrl: BASE, fetch: fn });
+
+    const result = await client.getCharacterRaw('Kadokk');
+
+    expect(result?.character.name).toBe('Kadokk');
+    expect(result?.raw).toEqual(body);
   });
 });
 
