@@ -43,6 +43,14 @@ describe('getTierLimits', () => {
     expect(getTierLimits('disabled').linkedCharacters).toBe(0);
   });
 
+  it('caps memory facts per tier (0 = memory features gated off)', () => {
+    expect(getTierLimits('free').memoryFacts).toBe(0);
+    expect(getTierLimits('pro').memoryFacts).toBe(1000);
+    expect(getTierLimits('guild_pro').memoryFacts).toBe(1000);
+    expect(getTierLimits('admin').memoryFacts).toBe(Number.MAX_SAFE_INTEGER);
+    expect(getTierLimits('disabled').memoryFacts).toBe(0);
+  });
+
   it('returns frozen copies to prevent tier limit mutation', () => {
     const limits = getTierLimits('free');
     expect(Object.isFrozen(limits)).toBe(true);
