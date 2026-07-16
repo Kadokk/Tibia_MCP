@@ -103,7 +103,7 @@ function makeFixtureBridge() {
 
 // --- user fixtures: rendered through the REAL context service ------------
 
-type UserFixture = { tier: 'free' | 'pro'; snapshots: unknown[]; facts: unknown[]; goals: unknown[]; gists: string[] };
+type UserFixture = { tier: 'free' | 'pro'; snapshots: unknown[]; facts: unknown[]; goals: unknown[]; gists: string[]; trackedQuests?: unknown[] };
 
 // Render the per-user system block through the same PlayerContextService the bot
 // uses in production, so the eval can never drift from the real block format.
@@ -113,7 +113,8 @@ async function renderFixtureContext(f: UserFixture): Promise<string | null> {
     settings: { getForUser: async () => ({ memoryEnabled: true, personalizeInGuilds: true }) } as never,
     tiers: { getTier: async () => f.tier } as never,
     memory: { topRankedFacts: async () => f.facts, listGoals: async () => f.goals } as never,
-    captures: { recentQaGists: async () => f.gists } as never
+    captures: { recentQaGists: async () => f.gists } as never,
+    quests: { listProgressForUser: async () => f.trackedQuests ?? [] } as never
   });
   return svc.buildUserContext('eval-user', { inGuild: false });
 }
@@ -202,7 +203,16 @@ async function main(): Promise<void> {
       const result = await withCaseTimeout(
         runAsk({
           anthropic,
-          mcp: createToolRouter({ mcp: fixtureBridge.bridge, ...local.deps }).bind('eval-user', fixture?.tier ?? 'free'),
+          // Minimal quest fakes just to satisfy LocalToolDeps here; Task 18 replaces
+          // these with recording fakes (makeLocalQuests) + golden cases. Whole-arg
+          // `as never` mirrors localTools.test.ts and also sidesteps the pre-existing
+          // makeLocalMemory.searchFacts fake-shape gap (unrelated eval-stub debt).
+          mcp: createToolRouter({
+            mcp: fixtureBridge.bridge,
+            ...local.deps,
+            quests: { findByNameLoose: async () => null },
+            questEligibility: { check: async () => ({ kind: 'not_found' }) }
+          } as never).bind('eval-user', fixture?.tier ?? 'free'),
           tools,
           model,
           question: c.question,
