@@ -15,7 +15,9 @@ const envSchema = z.object({
   AI_DAILY_SPEND_CAP_USD: z.coerce.number().positive().default(0.7),
   TIBIADATA_BASE_URL: z.string().trim().url().default('https://api.tibiadata.com'),
   PROFILE_SYNC_TICK_MS: z.coerce.number().int().positive().default(300_000),
-  DISTILL_TICK_MS: z.coerce.number().int().positive().default(300_000)
+  DISTILL_TICK_MS: z.coerce.number().int().positive().default(300_000),
+  QUEST_IMPORT_TICK_MS: z.coerce.number().int().positive().default(604_800_000),
+  QUEST_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false')
 });
 
 export type AppEnv = {
@@ -32,6 +34,8 @@ export type AppEnv = {
   tibiaDataBaseUrl: string;
   profileSyncTickMs: number;
   distillTickMs: number;
+  questImportTickMs: number;
+  questImportEnabled: boolean;
 };
 
 export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
@@ -49,6 +53,8 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     aiDailySpendCapUsd: parsed.AI_DAILY_SPEND_CAP_USD,
     tibiaDataBaseUrl: parsed.TIBIADATA_BASE_URL,
     profileSyncTickMs: parsed.PROFILE_SYNC_TICK_MS,
-    distillTickMs: parsed.DISTILL_TICK_MS
+    distillTickMs: parsed.DISTILL_TICK_MS,
+    questImportTickMs: parsed.QUEST_IMPORT_TICK_MS,
+    questImportEnabled: parsed.QUEST_IMPORT_ENABLED
   };
 }

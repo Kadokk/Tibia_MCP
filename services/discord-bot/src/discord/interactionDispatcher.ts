@@ -17,6 +17,19 @@ export function createInteractionDispatcher(commands: BotCommand[] = registeredC
   const commandByName = new Map(commands.map((command) => [command.data.name, command]));
 
   return async (interaction: Interaction) => {
+    // typeof guard: existing dispatcher test fakes only stub isChatInputCommand, so an
+    // unguarded isAutocomplete() call would TypeError on them.
+    if (typeof interaction.isAutocomplete === 'function' && interaction.isAutocomplete()) {
+      const command = commandByName.get(interaction.commandName);
+      try {
+        await command?.autocomplete?.(interaction);
+      } catch (err) {
+        console.error(`autocomplete failed for /${interaction.commandName}`, err);
+        await interaction.respond([]).catch(() => undefined);
+      }
+      return;
+    }
+
     if (!isChatInputCommandInteraction(interaction)) return;
 
     const command = commandByName.get(interaction.commandName);

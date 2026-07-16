@@ -10,7 +10,9 @@
     "lint": "eslint src",
     "build": "tsc -p tsconfig.json",
     "eval": "tsx eval/run.ts",
-    "eval:distill": "tsx eval/distill.ts"
+    "eval:prefix": "tsx eval/prefixTokens.ts",
+    "eval:distill": "tsx eval/distill.ts",
+    "import:quests": "tsx src/importers/runQuestImport.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

@@ -9,7 +9,7 @@ namespace Bazaar {
     std::string auction_url(const std::string& auction_id);
 
     std::string parse_search_results(const std::string& html);
-    std::string parse_auction_detail(const std::string& html);
+    std::string parse_auction_detail(const std::string& html, bool include_quest_lines = false);
 
     // A single ended (past) character auction, parsed from the past-trades page.
     struct AuctionRecord {

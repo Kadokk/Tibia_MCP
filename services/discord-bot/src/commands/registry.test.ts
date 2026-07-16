@@ -26,7 +26,16 @@ function fakeRegistryDeps(): RegistryDeps {
     memory: { listActiveFacts: vi.fn().mockResolvedValue([]), deactivateFact: vi.fn(), forgetEverything: vi.fn(), insertFact: vi.fn().mockResolvedValue(9), listGoals: vi.fn().mockResolvedValue([]), countActiveFacts: vi.fn().mockResolvedValue(0) },
     settings: { getForUser: vi.fn().mockResolvedValue({ memoryEnabled: true, personalizeInGuilds: true }), upsert: vi.fn().mockResolvedValue(undefined) },
     links: { listForUser: vi.fn().mockResolvedValue([]), countForUser: vi.fn().mockResolvedValue(0) },
-    snapshots: { latestForLink: vi.fn().mockResolvedValue(null) }
+    snapshots: { latestForLink: vi.fn().mockResolvedValue(null) },
+    quests: {
+      findByNameLoose: vi.fn().mockResolvedValue(null),
+      upsertProgress: vi.fn().mockResolvedValue(undefined),
+      countTracked: vi.fn().mockResolvedValue(0),
+      listProgressForUser: vi.fn().mockResolvedValue([]),
+      searchByNamePrefix: vi.fn().mockResolvedValue([])
+    },
+    questEligibility: { next: vi.fn().mockResolvedValue({ kind: 'ok', quests: [] }) },
+    questSeed: { seedFromAuction: vi.fn().mockResolvedValue({ kind: 'ok', characterName: 'Kadokk', matched: 0, inferred: 0, unmatched: [] }) }
   };
 }
 
@@ -57,21 +66,31 @@ describe('command registry', () => {
     expect(commandNames()).toEqual(expect.arrayContaining(['goals', 'settings']));
   });
 
+  it('registers the /quest command with a track option that declares autocomplete', () => {
+    expect(commandNames()).toContain('quest');
+    const payload = commandRegistrationPayloads.find((p) => p.name === 'quest');
+    const subs = (payload?.options ?? []).map((o) => o.name);
+    expect(subs).toEqual(['track', 'done', 'list', 'next']);
+    const track = (payload?.options ?? []).find((o) => o.name === 'track') as { options?: { name: string; autocomplete?: boolean }[] } | undefined;
+    const questOption = (track?.options ?? []).find((o) => o.name === 'quest');
+    expect(questOption?.autocomplete).toBe(true);
+  });
+
   it('goals declares set/list/done subcommands', () => {
     const payload = commandRegistrationPayloads.find((p) => p.name === 'goals');
     const subs = (payload?.options ?? []).map((o) => o.name);
     expect(subs).toEqual(['set', 'list', 'done']);
   });
 
-  it('link declares add/verify/remove subcommands', () => {
+  it('link declares add/verify/remove/seed subcommands', () => {
     const payload = commandRegistrationPayloads.find((p) => p.name === 'link');
     const subs = (payload?.options ?? []).map((o) => o.name);
-    expect(subs).toEqual(['add', 'verify', 'remove']);
+    expect(subs).toEqual(['add', 'verify', 'remove', 'seed']);
   });
 
   it('exports Discord registration payloads with the expected option shapes', () => {
     expect(registeredCommands.every((command) => typeof command.data.toJSON === 'function')).toBe(true);
-    expect(commandRegistrationPayloads).toHaveLength(12);
+    expect(commandRegistrationPayloads).toHaveLength(13);
 
     const price = commandRegistrationPayloads.find((c) => c.name === 'price');
     expect(price?.options).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'item', required: true })]));

@@ -1,6 +1,8 @@
 import type { McpBridge, McpToolDef, McpToolResult } from '../mcp/mcpClient';
 import type { MemoryRepository } from '../repositories/memoryRepository';
 import type { CaptureRepository } from '../repositories/captureRepository';
+import type { QuestRepository, QuestRow } from '../repositories/questRepository';
+import type { QuestEligibilityService } from '../services/questEligibilityService';
 import type { Tier } from '../services/tiers';
 import { getTierLimits } from '../services/tiers';
 import { sanitizeFact } from '../services/factSanitizer';
@@ -35,6 +37,18 @@ export const localToolDefs: McpToolDef[] = [
       properties: { query: { type: 'string', description: 'What to look for, e.g. "hunting preferences"' } },
       required: ['query']
     }
+  },
+  {
+    name: 'get_quest_info',
+    description:
+      'Look up a Tibia quest in the curated quest database: level requirements, premium, location, rewards, dangers, required equipment, and rewritten walkthrough steps with the TibiaWiki source link. Prefer this over search_quest.',
+    inputSchema: { type: 'object', properties: { quest: { type: 'string', description: 'Quest name or quest-line label, e.g. "Against the Spider Cult"' } }, required: ['quest'] }
+  },
+  {
+    name: 'check_quest_eligibility',
+    description:
+      "Check whether the asking player's linked character can start a given quest (level, premium, already-done). Use before recommending a specific quest.",
+    inputSchema: { type: 'object', properties: { quest: { type: 'string', description: 'Quest name' } }, required: ['quest'] }
   }
 ];
 
@@ -44,6 +58,8 @@ export type LocalToolDeps = {
   mcp: Pick<McpBridge, 'callTool'>;
   memory: Pick<MemoryRepository, 'insertFact' | 'countActiveFacts' | 'searchFacts'>;
   captures: Pick<CaptureRepository, 'append'>;
+  quests: Pick<QuestRepository, 'findByNameLoose'>;
+  questEligibility: Pick<QuestEligibilityService, 'check'>;
 };
 
 export type BoundToolRouter = Pick<McpBridge, 'callTool'>;
@@ -60,6 +76,9 @@ export function createToolRouter(deps: LocalToolDeps): { bind(userId: string, ti
       return {
         async callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
           if (!LOCAL_TOOL_NAMES.has(name)) return deps.mcp.callTool(name, args);
+          // Quest tools are public data — not tier-gated. They route before the premium gate.
+          if (name === 'get_quest_info') return getQuestInfo(deps, args);
+          if (name === 'check_quest_eligibility') return checkQuestEligibility(deps, userId, args);
           if (!premium) return { text: PREMIUM_MEMORY_MESSAGE, isError: false };
           if (name === 'remember') return remember(deps, userId, tier, args);
           return recallMemory(deps, userId, args);
@@ -93,4 +112,39 @@ async function recallMemory(deps: LocalToolDeps, userId: string, args: Record<st
   const rows = await deps.memory.searchFacts(userId, String(args.query ?? ''), 10);
   if (!rows.length) return { text: 'No stored memories match that query.', isError: false };
   return { text: rows.map((f) => `- [${f.para_type}] ${f.fact}`).join('\n'), isError: false };
+}
+
+function renderQuestInfo(q: QuestRow): string {
+  const lines = [
+    `**${q.title}**${q.quest_line_label ? ` (quest line: ${q.quest_line_label})` : ''}`,
+    `Requirements: ${q.min_level ? `level ${q.min_level}` : 'no level requirement'}${q.rec_level ? ` (recommended ${q.rec_level})` : ''}${q.premium ? ', Premium game account' : ''}`,
+    q.location ? `Location: ${q.location}` : '',
+    q.rewards_json.length ? `Rewards: ${q.rewards_json.slice(0, 8).join(', ')}` : '',
+    q.dangers_json.length ? `Dangers: ${q.dangers_json.slice(0, 8).join(', ')}` : '',
+    q.requirements_json.length ? `Bring: ${q.requirements_json.slice(0, 10).join(', ')}` : '',
+    q.steps_json.length ? `Steps:\n${q.steps_json.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : '',
+    `Full walkthrough: ${q.wiki_url}`,
+    q.attribution
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+async function getQuestInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
+  const name = String(args.quest ?? '');
+  const q = await deps.quests.findByNameLoose(name);
+  if (!q) return { text: `No quest matched "${name}". Try the exact quest name or quest-line label.`, isError: false };
+  return { text: renderQuestInfo(q), isError: false };
+}
+
+async function checkQuestEligibility(deps: LocalToolDeps, userId: string, args: Record<string, unknown>): Promise<McpToolResult> {
+  const name = String(args.quest ?? '');
+  const r = await deps.questEligibility.check(userId, name);
+  if (r.kind === 'no_character') {
+    return { text: 'The player has no verified linked character — suggest /link add to enable eligibility checks.', isError: false };
+  }
+  if (r.kind === 'not_found') {
+    return { text: `No quest matched "${name}". Try the exact quest name or quest-line label.`, isError: false };
+  }
+  const summary = `Eligible: ${r.eligible ? 'yes' : 'no'}${r.reasons.length ? ` — ${r.reasons.join('; ')}` : ''}`;
+  return { text: `${summary}\n${renderQuestInfo(r.quest)}`, isError: false };
 }

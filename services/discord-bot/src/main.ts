@@ -13,6 +13,7 @@ import { connectMcp } from './mcp/mcpClient';
 import { startRefreshScheduler } from './scheduler/refreshScheduler';
 import { startProfileSyncScheduler } from './scheduler/profileSyncScheduler';
 import { startDistillScheduler } from './scheduler/distillScheduler';
+import { startQuestImportScheduler } from './scheduler/questImportScheduler';
 import { createTibiaDataClient } from './sources/tibiaDataClient';
 import { AccessLimitsService } from './services/accessLimits';
 import { UsageRepository } from './repositories/usageRepository';
@@ -23,10 +24,16 @@ import { CaptureRepository } from './repositories/captureRepository';
 import { UserSettingsRepository } from './repositories/userSettingsRepository';
 import { MemoryRepository } from './repositories/memoryRepository';
 import { EntityRepository } from './repositories/entityRepository';
+import { QuestRepository } from './repositories/questRepository';
+import { WikiImportRunRepository } from './repositories/wikiImportRunRepository';
 import { PlayerContextService } from './services/playerContextService';
 import { DistillService } from './services/distillService';
 import { LinkService } from './services/linkService';
 import { ProfileSyncService } from './services/profileSyncService';
+import { QuestEligibilityService } from './services/questEligibilityService';
+import { QuestSeedService } from './services/questSeedService';
+import { QUEST_LINE_LABEL_MAP } from './services/questLineLabelMap';
+import { WikiQuestImporter, WIKI_USER_AGENT } from './importers/wikiQuestImporter';
 import type { Tier } from './services/tiers';
 import { createDiscordClient, startDiscordBot } from './discord/createClient';
 import { createInteractionDispatcher } from './discord/interactionDispatcher';
@@ -66,7 +73,32 @@ const captures = new CaptureRepository(db);
 const settings = new UserSettingsRepository(db);
 const memory = new MemoryRepository(db);
 const entities = new EntityRepository(db);
-const context = new PlayerContextService({ snapshots, settings, tiers, memory, captures });
+
+// Quest companion: repos, services, and the weekly TibiaWiki importer. Constructed
+// here (before context/router/registry below) because those consumers take `quests`
+// and `questEligibility`. The importer scheduler no-ops unless QUEST_IMPORT_ENABLED.
+const quests = new QuestRepository(db);
+const importRuns = new WikiImportRunRepository(db);
+const questEligibility = new QuestEligibilityService({ snapshots, quests });
+const questSeed = new QuestSeedService({ mcp, quests, links: linkedChars, captures, labelMap: QUEST_LINE_LABEL_MAP });
+const questImporter = new WikiQuestImporter({
+  http: {
+    getJson: (url) =>
+      fetch(url, { headers: { 'user-agent': WIKI_USER_AGENT } }).then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
+      )
+  },
+  anthropic,
+  quests,
+  runs: importRuns,
+  usage,
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  model: env.anthropicModel,
+  spendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000)
+});
+startQuestImportScheduler(questImporter, { tickMs: env.questImportTickMs, enabled: env.questImportEnabled });
+
+const context = new PlayerContextService({ snapshots, settings, tiers, memory, captures, quests });
 const linkService = new LinkService({ tibiaData, links: linkedChars, tiers });
 
 const profileSync = new ProfileSyncService({ links: linkedChars, snapshots, captures, tibiaData });
@@ -74,7 +106,7 @@ startProfileSyncScheduler(profileSync, { tickMs: env.profileSyncTickMs });
 
 // The tool router binds the Discord user id (and tier) at dispatch time — the id
 // is never a model-visible parameter — and satisfies runAsk's mcp.callTool dep.
-const router = createToolRouter({ mcp, memory, captures });
+const router = createToolRouter({ mcp, memory, captures, quests, questEligibility });
 
 // ONE merged, stable tool list: MCP defs then local defs, cache marker on the last.
 // Fetched once at startup so the Anthropic prompt-cache prefix (system + tools)
@@ -94,7 +126,8 @@ const ask = (question: string, askerName: string, userContext: string | null, us
 const commands = buildRegistry({
   access, usage, tiers, ask, context, captures, settings,
   dailySpendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000),
-  mcp, tibiaData, linkService, memory, links: linkedChars, snapshots
+  mcp, tibiaData, linkService, memory, links: linkedChars, snapshots,
+  quests, questEligibility, questSeed
 });
 
 await registerCommands({ token: env.discordToken, clientId: env.discordClientId, guildId: env.discordGuildId });
