@@ -57,4 +57,25 @@ describe('createInteractionDispatcher', () => {
 
     expect(interaction.reply).not.toHaveBeenCalled();
   });
+
+  it('routes autocomplete interactions to the command handler', async () => {
+    const autocomplete = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = createInteractionDispatcher([{ data: { name: 'quest' } as never, execute: vi.fn(), autocomplete }]);
+    const interaction = { isChatInputCommand: () => false, isAutocomplete: () => true, commandName: 'quest', respond: vi.fn() };
+    await dispatcher(interaction as never);
+    expect(autocomplete).toHaveBeenCalledWith(interaction);
+  });
+
+  it('autocomplete errors degrade to an empty suggestion list', async () => {
+    const dispatcher = createInteractionDispatcher([{ data: { name: 'quest' } as never, execute: vi.fn(), autocomplete: vi.fn().mockRejectedValue(new Error('db down')) }]);
+    const interaction = { isChatInputCommand: () => false, isAutocomplete: () => true, commandName: 'quest', respond: vi.fn().mockResolvedValue(undefined) };
+    await dispatcher(interaction as never);
+    expect(interaction.respond).toHaveBeenCalledWith([]);
+  });
+
+  it('autocomplete for a command without a handler is a no-op', async () => {
+    const dispatcher = createInteractionDispatcher([{ data: { name: 'price' } as never, execute: vi.fn() }]);
+    const interaction = { isChatInputCommand: () => false, isAutocomplete: () => true, commandName: 'price', respond: vi.fn() };
+    await expect(dispatcher(interaction as never)).resolves.not.toThrow();
+  });
 });

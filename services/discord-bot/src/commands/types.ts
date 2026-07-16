@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction, RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js';
+import type { AutocompleteInteraction, ChatInputCommandInteraction, RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js';
 
 export type CommandResponse = {
   content: string;
@@ -19,6 +19,8 @@ export type BotCommand = {
   // Returning null means the command already replied to the interaction itself
   // (e.g. a deferred reply), so the dispatcher must not reply again.
   execute(context: CommandContext): Promise<CommandResponse | null>;
+  // Optional autocomplete handler; the command responds to the interaction itself.
+  autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 };
 
 export function createTextResponse(content: string, ephemeral = false): CommandResponse {
