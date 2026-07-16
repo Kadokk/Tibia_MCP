@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "build": "tsc -p tsconfig.json",
-    "eval": "tsx eval/run.ts"
+    "eval": "tsx eval/run.ts",
+    "eval:distill": "tsx eval/distill.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
