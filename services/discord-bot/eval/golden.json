@@ -155,7 +155,7 @@
       "mustCallTool": "remember",
       "mustContain": [],
       "mustNotContain": ["premium feature"],
-      "langMarkers": ["the", "you", "to"]
+      "langMarkers": ["you", "to", "remember", "noted", "weekend", "mornings"]
     }
   ]
 }
