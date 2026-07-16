@@ -2,6 +2,7 @@
 #include <regex>
 #include <vector>
 #include <cctype>
+#include <algorithm>
 
 namespace {
 
@@ -46,6 +47,60 @@ std::string extract_class_text(const std::string& html, const std::string& class
     if (content_end == std::string::npos) return "";
 
     return trim(strip_tags(html.substr(content_start, content_end - content_start)));
+}
+
+// Slice one CharacterDetailsBlock's HTML by its id attribute; ends at the next block (or EOF).
+std::string extract_section(const std::string& html, const std::string& section_id) {
+    auto start = html.find("id=\"" + section_id + "\"");
+    if (start == std::string::npos) return "";
+    auto end = html.find("class=\"CharacterDetailsBlock", start + 1);
+    return html.substr(start, end == std::string::npos ? std::string::npos : end - start);
+}
+
+std::string strip_commas(std::string s) {
+    s.erase(std::remove(s.begin(), s.end(), ','), s.end());
+    return s;
+}
+
+// True for tibia.com empty-state rows ("No bosstiary entries.", "No charms.").
+bool is_empty_state(const std::string& name) {
+    return name.rfind("No ", 0) == 0 && !name.empty() && name.back() == '.';
+}
+
+// First-cell text of each Odd/Even row (header LabelH rows excluded by the class match).
+// Captures up to the first '<', so trailing icons (secret achievements) drop off; trim handles the space.
+std::vector<std::string> extract_row_names(const std::string& section) {
+    std::vector<std::string> out;
+    static const std::regex row_re("<tr class=\"(?:Odd|Even)\"><td[^>]*>([^<]*)");
+    for (auto it = std::sregex_iterator(section.begin(), section.end(), row_re);
+         it != std::sregex_iterator(); ++it) {
+        std::string name = trim((*it)[1].str());
+        if (!name.empty() && !is_empty_state(name)) out.push_back(name);
+    }
+    return out;
+}
+
+// Row COUNT for multi-column tables (bestiary rows start with a numeric Step cell,
+// not a name — count entries, excluding the empty-state row).
+size_t count_entry_rows(const std::string& section) {
+    size_t n = 0;
+    static const std::regex row_re("<tr class=\"(?:Odd|Even)\"><td[^>]*>([^<]*)");
+    for (auto it = std::sregex_iterator(section.begin(), section.end(), row_re);
+         it != std::sregex_iterator(); ++it) {
+        if (!is_empty_state(trim((*it)[1].str()))) ++n;
+    }
+    return n;
+}
+
+// "Available Charm Points" / "Spent Charm Points" label-value rows in the General block.
+std::string extract_label_value(const std::string& section, const std::string& label) {
+    const std::string needle = "<span class=\"LabelV\">" + label + ":</span>";
+    auto pos = section.find(needle);
+    if (pos == std::string::npos) return "";
+    auto div = section.find('>', section.find("<div", pos));
+    if (div == std::string::npos) return "";
+    auto end = section.find('<', div);
+    return strip_commas(trim(section.substr(div + 1, end - div - 1)));
 }
 
 // URL-encode a string value for query parameters
@@ -170,7 +225,7 @@ std::string parse_search_results(const std::string& html) {
     return output;
 }
 
-std::string parse_auction_detail(const std::string& html) {
+std::string parse_auction_detail(const std::string& html, bool include_quest_lines) {
     if (html.empty()) {
         return "Error: empty HTML input";
     }
@@ -218,6 +273,32 @@ std::string parse_auction_detail(const std::string& html) {
 
     if (has_skills) {
         output += "- Skills:\n" + skills_out;
+    }
+
+    if (include_quest_lines) {
+        const std::string quests_html = extract_section(html, "CompletedQuestLines");
+        if (!quests_html.empty()) {
+            auto names = extract_row_names(quests_html);
+            output += "\n## Completed Quest Lines (" + std::to_string(names.size()) + ")\n";
+            for (const auto& n : names) output += "- " + n + "\n";
+        }
+        const std::string ach_html = extract_section(html, "Achievements");
+        if (!ach_html.empty()) {
+            auto names = extract_row_names(ach_html);
+            output += "\n## Achievements (" + std::to_string(names.size()) + ")\n";
+            for (const auto& n : names) output += "- " + n + "\n";
+        }
+        const std::string general = extract_section(html, "General");
+        const std::string avail = extract_label_value(general, "Available Charm Points");
+        const std::string spent = extract_label_value(general, "Spent Charm Points");
+        const std::string bestiary = extract_section(html, "BestiaryProgress");
+        const std::string bosstiary = extract_section(html, "BosstiaryProgress");
+        if (!avail.empty() || !bestiary.empty() || !bosstiary.empty()) {
+            output += "\n## Character Progress\n";
+            if (!avail.empty()) output += "Charm Points: " + avail + " available, " + (spent.empty() ? "0" : spent) + " spent\n";
+            if (!bestiary.empty()) output += "Bestiary: " + std::to_string(count_entry_rows(bestiary)) + " creatures tracked\n";
+            if (!bosstiary.empty()) output += "Bosstiary: " + std::to_string(count_entry_rows(bosstiary)) + " bosses tracked\n";
+        }
     }
 
     return output;

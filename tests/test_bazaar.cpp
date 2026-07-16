@@ -68,3 +68,39 @@ TEST(BazaarTest, ParsePastAuctionsMarksCancelledWithoutWinner) {
     EXPECT_FALSE(records[2].has_winner);
     EXPECT_EQ(records[2].winning_bid, 0);
 }
+
+TEST(BazaarTest, ParseAuctionDetailWithQuestLines) {
+    auto html = read_fixture("bazaar/auction_detail_full.html");
+    auto result = Bazaar::parse_auction_detail(html, true);
+    EXPECT_NE(result.find("## Completed Quest Lines (6)"), std::string::npos);
+    EXPECT_NE(result.find("- Blood Brothers"), std::string::npos);
+    EXPECT_NE(result.find("- A Pirate's Tail"), std::string::npos);
+    EXPECT_NE(result.find("## Achievements (6)"), std::string::npos);
+    EXPECT_NE(result.find("- Allow Cookies?"), std::string::npos);
+    EXPECT_NE(result.find("Charm Points: 265 available, 12000 spent"), std::string::npos);  // comma stripped
+    EXPECT_NE(result.find("Bestiary: 4 creatures tracked"), std::string::npos);
+    EXPECT_NE(result.find("Bosstiary: 4 bosses tracked"), std::string::npos);
+    EXPECT_NE(result.find("Bubble Knight"), std::string::npos);  // legacy fields intact
+}
+
+TEST(BazaarTest, ParseAuctionDetailDefaultOmitsQuestSections) {
+    auto html = read_fixture("bazaar/auction_detail_full.html");
+    auto result = Bazaar::parse_auction_detail(html);
+    EXPECT_EQ(result.find("Completed Quest Lines"), std::string::npos);
+    EXPECT_NE(result.find("Bubble Knight"), std::string::npos);
+}
+
+TEST(BazaarTest, ParseAuctionDetailQuestFlagGracefulWhenSectionsMissing) {
+    auto html = read_fixture("bazaar/auction_detail.html");  // legacy fixture has no sections
+    auto result = Bazaar::parse_auction_detail(html, true);
+    EXPECT_NE(result.find("Bubble Knight"), std::string::npos);
+    EXPECT_EQ(result.find("## Completed Quest Lines"), std::string::npos);
+}
+
+TEST(BazaarTest, ParseAuctionDetailEmptyStateRowsYieldZero) {
+    std::string html = "<div class=\"AuctionInfo\"><div class=\"AuctionCharacterName\"><a>Empty</a></div></div>"
+        "<div class=\"CharacterDetailsBlock\" id=\"BosstiaryProgress\"><table class=\"TableContent\">"
+        "<tr class=\"Even\"><td>No bosstiary entries.</td></tr></table></div>";
+    auto result = Bazaar::parse_auction_detail(html, true);
+    EXPECT_NE(result.find("Bosstiary: 0 bosses tracked"), std::string::npos);
+}
