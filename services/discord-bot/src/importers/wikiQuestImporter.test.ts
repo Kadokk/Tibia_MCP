@@ -119,4 +119,36 @@ describe('WikiQuestImporter', () => {
     await importer.run({ limit: 0 });
     expect(deps.quests.upsertQuest).not.toHaveBeenCalled();
   });
+
+  it('extracts a Method whose prose sits in ===subsections=== (stops only at level-2): LLM called, steps stored', async () => {
+    const { deps, importer } = makeImporter();
+    (deps.http.getJson as ReturnType<typeof vi.fn>)
+      .mockReset()
+      .mockResolvedValueOnce(CATEGORY_ONE)
+      .mockResolvedValueOnce(REVIDS)
+      .mockResolvedValueOnce(fixture('quest_page.api.json'))
+      .mockResolvedValueOnce(fixture('quest_spoiler_subsections.api.json'));
+    await importer.run();
+    expect(deps.anthropic.messages.create).toHaveBeenCalled();
+    const content = (deps.anthropic.messages.create as ReturnType<typeof vi.fn>).mock.calls[0][0].messages[0].content as string;
+    expect(content).toContain('Cake Golem');   // Method's ===First stage=== prose reached the LLM
+    const upsert = (deps.quests.upsertQuest as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(upsert.steps.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to the whole spoiler when there is no ==Method== heading: LLM called, steps stored', async () => {
+    const { deps, importer } = makeImporter();
+    (deps.http.getJson as ReturnType<typeof vi.fn>)
+      .mockReset()
+      .mockResolvedValueOnce(CATEGORY_ONE)
+      .mockResolvedValueOnce(REVIDS)
+      .mockResolvedValueOnce(fixture('quest_page.api.json'))
+      .mockResolvedValueOnce(fixture('quest_spoiler_structured.api.json'));
+    await importer.run();
+    expect(deps.anthropic.messages.create).toHaveBeenCalled();
+    const content = (deps.anthropic.messages.create as ReturnType<typeof vi.fn>).mock.calls[0][0].messages[0].content as string;
+    expect(content).toContain('Cheaty');   // mission prose (no Method section) reached the LLM
+    const upsert = (deps.quests.upsertQuest as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(upsert.steps.length).toBeGreaterThan(0);
+  });
 });

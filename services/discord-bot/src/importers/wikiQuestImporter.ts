@@ -36,12 +36,22 @@ type QueryResponse = {
   continue?: { cmcontinue?: string };
 };
 
-/** Extract the wikitext under an "== <heading> ==" section up to the next heading. */
+/** Extract the wikitext under an "== <heading> ==" section up to the next LEVEL-2
+ *  heading. The terminator excludes "===" (level-3 subheadings) via negative
+ *  lookahead, so a section whose prose lives in ===subsections=== is not truncated. */
 function sectionText(wikitext: string, heading: string): string | null {
-  const re = new RegExp(`==\\s*${heading}\\s*==([\\s\\S]*?)(?:\\n==|$)`, 'i');
+  const re = new RegExp(`==\\s*${heading}\\s*==([\\s\\S]*?)(?:\\n==(?!=)|$)`, 'i');
   const m = wikitext.match(re);
   const body = m ? m[1].trim() : '';
   return body ? body : null;
+}
+
+/** Fallback step-gist source for quests with no ==Method==: the whole spoiler minus
+ *  reward-type level-2 sections (rewards come from the infobox), capped at 6000 chars. */
+function spoilerFallback(spoiler: string): string | null {
+  const stripped = spoiler.replace(/(?<![^\n])==(?!=)[^=\n]*reward[^=\n]*==[\s\S]*?(?=\n==(?!=)|$)/gi, '');
+  const trimmed = stripped.trim();
+  return trimmed ? trimmed.slice(0, 6000) : null;
 }
 
 export class WikiQuestImporter {
@@ -162,13 +172,16 @@ export class WikiQuestImporter {
     const spoiler = await this.fetchContent(`${title}/Spoiler`);
     const requirements = spoiler ? parseRequiredEquipment(spoiler) : [];
     const method = spoiler ? sectionText(spoiler, 'Method') : null;
+    // Mission-by-mission quests have no ==Method==; fall back to the whole spoiler so
+    // these (often the highest-value quests) still get step gists.
+    const stepSource = method ?? (spoiler ? spoilerFallback(spoiler) : null);
 
     let steps: string[] = [];
     let sourceRevision: number | null = revid;
     let capped = false;
     let cost = 0;
 
-    if (method) {
+    if (stepSource) {
       const spend = await this.deps.usage.globalSpendTodayUsdMicros();
       if (spend >= this.deps.spendCapUsdMicros) {
         // Out of budget: import the page without steps and without a revision so it
@@ -176,7 +189,7 @@ export class WikiQuestImporter {
         capped = true;
         sourceRevision = null;
       } else {
-        const rewritten = await this.rewriteSteps(title, method);
+        const rewritten = await this.rewriteSteps(title, stepSource);
         steps = rewritten.steps;
         cost = rewritten.cost;
         await this.deps.usage.recordDistillUsage('system:quest_import', cost);
@@ -205,14 +218,14 @@ export class WikiQuestImporter {
   }
 
   /** One forced-tool-use call; facts stay exact, prose is rewritten in the model's own words. */
-  private async rewriteSteps(title: string, method: string): Promise<{ steps: string[]; cost: number }> {
+  private async rewriteSteps(title: string, source: string): Promise<{ steps: string[]; cost: number }> {
     const response = await this.deps.anthropic.messages.create({
       model: this.deps.model,
       max_tokens: 1024,
       system: STEPS_SYSTEM,
       tools: [STEPS_TOOL],
       tool_choice: { type: 'tool', name: 'record_quest_steps' },
-      messages: [{ role: 'user', content: `Quest: ${title}\n\nMETHOD:\n${method.slice(0, 6000)}` }]
+      messages: [{ role: 'user', content: `Quest: ${title}\n\nMETHOD:\n${source.slice(0, 6000)}` }]
     });
     const cost = costUsdMicros(response.usage);
     const toolUse = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');

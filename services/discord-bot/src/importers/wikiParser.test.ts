@@ -29,6 +29,11 @@ describe('parseInfoboxQuest (real fixture)', () => {
     expect(withAch.achievements).toEqual(['Deep Diver']);
     expect(info.achievements).toEqual([]);
   });
+  it('sanitizes a boolean-string log value (yes/no) to null, keeps real quest-log labels', () => {
+    expect(parseInfoboxQuest('{{Infobox Quest\n| name = X Quest\n| log = yes\n}}').log).toBeNull();
+    expect(parseInfoboxQuest('{{Infobox Quest\n| name = X Quest\n| log = No\n}}').log).toBeNull();
+    expect(parseInfoboxQuest('{{Infobox Quest\n| name = X Quest\n| log = Tibia Tales\n}}').log).toBe('Tibia Tales');
+  });
 });
 
 describe('parseRequiredEquipment (real fixture)', () => {
@@ -39,6 +44,11 @@ describe('parseRequiredEquipment (real fixture)', () => {
   });
   it('returns [] when the section is missing', () => {
     expect(parseRequiredEquipment('==Method==\nGo somewhere.')).toEqual([]);
+  });
+  it('captures bullets across a level-3 subsection (terminates only at level-2 headings)', () => {
+    const eq = parseRequiredEquipment('==Required Equipment==\n* [[Rope]]\n===Optional===\n* [[Shovel]]\n==Method==\nGo.');
+    expect(eq).toContain('Rope');
+    expect(eq).toContain('Shovel');   // dropped when the regex stopped at "===Optional==="
   });
 });
 

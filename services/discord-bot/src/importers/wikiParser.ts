@@ -41,10 +41,13 @@ export function parseInfoboxQuest(wikitext: string): InfoboxQuest {
   const achievements = /achievement/i.test(rewardRaw)
     ? extractLinkNames(rewardRaw.split(/achievement[s]?/i).slice(1).join(' '))
     : [];
+  // Some pages carry a literal boolean "yes"/"no" in the log param instead of a real
+  // quest-log label — that is not a label, so drop it.
+  const logRaw = stripWikiMarkup(get('log'));
   return {
     name: stripWikiMarkup(get('name')) || null,
     aka: stripWikiMarkup(get('aka')) || null,
-    log: stripWikiMarkup(get('log')) || null,
+    log: logRaw && !/^(yes|no)$/i.test(logRaw) ? logRaw : null,
     lvl: coerceLevel(get('lvl')),
     lvlrec: coerceLevel(get('lvlrec')),
     premium: /^\s*yes/i.test(get('premium')),
@@ -58,7 +61,7 @@ export function parseInfoboxQuest(wikitext: string): InfoboxQuest {
 
 /** "* [[Item]]" bullets under ==Required Equipment== until the next == heading. */
 export function parseRequiredEquipment(spoilerWikitext: string): string[] {
-  const m = spoilerWikitext.match(/==\s*Required Equipment\s*==([\s\S]*?)(?:\n==|$)/i);
+  const m = spoilerWikitext.match(/==\s*Required Equipment\s*==([\s\S]*?)(?:\n==(?!=)|$)/i);
   if (!m) return [];
   return m[1].split('\n')
     .filter((l) => l.trim().startsWith('*'))
