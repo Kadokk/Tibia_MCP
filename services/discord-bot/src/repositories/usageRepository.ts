@@ -3,16 +3,21 @@ import type { DbClient } from '../db/client';
 export class UsageRepository {
   constructor(private readonly db: DbClient) {}
 
-  async recordAiQuestion(i: { discordUserId: string; inputTokens: number; outputTokens: number; costUsdMicros: number }): Promise<void> {
+  async recordAiQuestion(i: {
+    discordUserId: string; inputTokens: number; outputTokens: number;
+    cacheCreationTokens: number; cacheReadTokens: number; costUsdMicros: number;
+  }): Promise<void> {
     await this.db.query(
-      `INSERT INTO ai_usage (discord_user_id, day, questions, input_tokens, output_tokens, cost_usd_micros)
-       VALUES ($1, CURRENT_DATE, 1, $2, $3, $4)
+      `INSERT INTO ai_usage (discord_user_id, day, questions, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cost_usd_micros)
+       VALUES ($1, CURRENT_DATE, 1, $2, $3, $4, $5, $6)
        ON CONFLICT (discord_user_id, day) DO UPDATE SET
          questions = ai_usage.questions + 1,
          input_tokens = ai_usage.input_tokens + EXCLUDED.input_tokens,
          output_tokens = ai_usage.output_tokens + EXCLUDED.output_tokens,
+         cache_creation_tokens = ai_usage.cache_creation_tokens + EXCLUDED.cache_creation_tokens,
+         cache_read_tokens = ai_usage.cache_read_tokens + EXCLUDED.cache_read_tokens,
          cost_usd_micros = ai_usage.cost_usd_micros + EXCLUDED.cost_usd_micros`,
-      [i.discordUserId, i.inputTokens, i.outputTokens, i.costUsdMicros],
+      [i.discordUserId, i.inputTokens, i.outputTokens, i.cacheCreationTokens, i.cacheReadTokens, i.costUsdMicros],
     );
   }
 
