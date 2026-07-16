@@ -1,15 +1,32 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
 import type { LinkService } from '../services/linkService';
+import type { QuestSeedService } from '../services/questSeedService';
 import { createTextResponse, type CommandResponse } from './types';
 
 export async function executeLinkCommand(input: {
-  interaction: Pick<ChatInputCommandInteraction, 'user'> & {
+  interaction: Pick<ChatInputCommandInteraction, 'user' | 'deferReply' | 'editReply'> & {
     options: Pick<ChatInputCommandInteraction['options'], 'getSubcommand' | 'getString'>;
   };
   linkService: Pick<LinkService, 'add' | 'verify' | 'remove'>;
-}): Promise<CommandResponse> {
+  questSeed: Pick<QuestSeedService, 'seedFromAuction'>;
+}): Promise<CommandResponse | null> {
   const userId = input.interaction.user.id;
   const sub = input.interaction.options.getSubcommand();
+
+  // Seeding does live HTTP through the MCP bridge (1–3 s) — defer like askCommand.
+  if (sub === 'seed') {
+    await input.interaction.deferReply({ ephemeral: true });
+    const r = await input.questSeed.seedFromAuction(userId, input.interaction.options.getString('auction', true));
+    const msg =
+      r.kind === 'bad_reference' ? 'That does not look like a Char Bazaar auction — paste the auction URL or its numeric id.'
+      : r.kind === 'fetch_failed' ? 'Could not fetch that auction from tibia.com right now — try again in a minute.'
+      : r.kind === 'not_your_character' ? 'That auction is for a character you have not linked. `/link add` it first, then seed.'
+      : `Seeded **${r.matched}** completed quest lines (+${r.inferred} inferred from achievements) onto **${r.characterName}** — marked as "guessed", your own \`/quest done\` reports always win.` +
+        (r.unmatched.length ? `\nUnrecognized quest lines (logged for curation): ${r.unmatched.slice(0, 10).join(', ')}` : '');
+    await input.interaction.editReply(msg);
+    return null;
+  }
+
   const character = input.interaction.options.getString('character', true);
 
   if (sub === 'add') {

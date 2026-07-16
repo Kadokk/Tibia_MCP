@@ -24,6 +24,7 @@ import type { CharacterSnapshotRepository } from '../repositories/characterSnaps
 import type { UserSettingsRepository } from '../repositories/userSettingsRepository';
 import type { QuestRepository } from '../repositories/questRepository';
 import type { QuestEligibilityService } from '../services/questEligibilityService';
+import type { QuestSeedService } from '../services/questSeedService';
 
 async function placeholderExecute(context: CommandContext): Promise<CommandResponse> {
   return createTextResponse(`/${context.interaction.commandName} is not wired to services yet.`, true);
@@ -98,7 +99,9 @@ const commandData: CommandData[] = [
     .addSubcommand((s) => s.setName('verify').setDescription('Verify a pending link via the character comment code')
       .addStringOption((o) => o.setName('character').setDescription('Character name').setRequired(true)))
     .addSubcommand((s) => s.setName('remove').setDescription('Remove a linked character')
-      .addStringOption((o) => o.setName('character').setDescription('Character name').setRequired(true))),
+      .addStringOption((o) => o.setName('character').setDescription('Character name').setRequired(true)))
+    .addSubcommand((s) => s.setName('seed').setDescription('Seed your quest checklist from a Char Bazaar auction of your character')
+      .addStringOption((o) => o.setName('auction').setDescription('Auction URL or id').setRequired(true))),
   new SlashCommandBuilder()
     .setName('memory')
     .setDescription('See or delete what TibiaEdge remembers about you.')
@@ -157,6 +160,7 @@ export type RegistryDeps = AskCommandDeps & {
   settings: Pick<UserSettingsRepository, 'getForUser' | 'upsert'>;
   quests: Pick<QuestRepository, 'findByNameLoose' | 'upsertProgress' | 'countTracked' | 'listProgressForUser' | 'searchByNamePrefix'>;
   questEligibility: Pick<QuestEligibilityService, 'next'>;
+  questSeed: Pick<QuestSeedService, 'seedFromAuction'>;
 };
 
 // Real registry with dependency-injected executes. ask/char/boosted/price/auction
@@ -200,7 +204,7 @@ export function buildRegistry(deps: RegistryDeps): BotCommand[] {
           })
         };
       case 'link':
-        return { data, execute: (ctx: CommandContext) => executeLinkCommand({ interaction: ctx.interaction, linkService: deps.linkService }) };
+        return { data, execute: (ctx: CommandContext) => executeLinkCommand({ interaction: ctx.interaction, linkService: deps.linkService, questSeed: deps.questSeed }) };
       case 'memory':
         return { data, execute: (ctx: CommandContext) => executeMemoryCommand({ interaction: ctx.interaction, memory: deps.memory, captures: deps.captures }) };
       case 'profile':

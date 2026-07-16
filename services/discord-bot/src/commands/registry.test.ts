@@ -34,7 +34,8 @@ function fakeRegistryDeps(): RegistryDeps {
       listProgressForUser: vi.fn().mockResolvedValue([]),
       searchByNamePrefix: vi.fn().mockResolvedValue([])
     },
-    questEligibility: { next: vi.fn().mockResolvedValue({ kind: 'ok', quests: [] }) }
+    questEligibility: { next: vi.fn().mockResolvedValue({ kind: 'ok', quests: [] }) },
+    questSeed: { seedFromAuction: vi.fn().mockResolvedValue({ kind: 'ok', characterName: 'Kadokk', matched: 0, inferred: 0, unmatched: [] }) }
   };
 }
 
@@ -81,10 +82,10 @@ describe('command registry', () => {
     expect(subs).toEqual(['set', 'list', 'done']);
   });
 
-  it('link declares add/verify/remove subcommands', () => {
+  it('link declares add/verify/remove/seed subcommands', () => {
     const payload = commandRegistrationPayloads.find((p) => p.name === 'link');
     const subs = (payload?.options ?? []).map((o) => o.name);
-    expect(subs).toEqual(['add', 'verify', 'remove']);
+    expect(subs).toEqual(['add', 'verify', 'remove', 'seed']);
   });
 
   it('exports Discord registration payloads with the expected option shapes', () => {
