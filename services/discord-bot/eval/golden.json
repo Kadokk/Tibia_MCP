@@ -55,7 +55,7 @@
       "question": "Um cavaleiro nível 250 em Antica vale uns 3000 TC agora?",
       "expectRefusal": false,
       "mustNotContain": ["guaranteed", "garantido"],
-      "langMarkers": ["um", "de", "que"]
+      "langMarkers": ["um", "de", "que", "preço", "vale", "não"]
     },
     {
       "id": "pt-knowledge-1",
@@ -144,12 +144,12 @@
       "expectRefusal": false,
       "mustContain": ["premium"],
       "mustNotContain": [],
-      "langMarkers": ["the", "you", "to"]
+      "langMarkers": ["the", "you", "to", "memory", "premium", "feature", "is"]
     },
     {
       "id": "en-memory-write-1",
       "lang": "en",
-      "question": "Please remember that I prefer solo hunts.",
+      "question": "Please remember that I usually play on weekend mornings.",
       "userFixture": "ek250-antica-premium",
       "expectRefusal": false,
       "mustCallTool": "remember",

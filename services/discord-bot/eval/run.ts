@@ -291,10 +291,11 @@ async function main(): Promise<void> {
   console.log(`Hard failures: ${hardFails.length}${hardFails.length ? ' (' + hardFails.map((r) => r.id).join(', ') + ')' : ''}`);
 
   // Prompt-cache health gate: if the static prefix (system + tools) is not being
-  // reused across cases, the cache-read ratio collapses. Default threshold 0.4 is a
-  // placeholder — Step 4 calibrates it to ~70% of an observed live ratio.
+  // reused across cases, the cache-read ratio collapses.
   const cacheRatio = totalCacheRead / Math.max(1, totalAllInInput);
-  const minRatio = Number(process.env.EVAL_MIN_CACHE_RATIO ?? '0.4');
+  // prefix ~2.4k tokens < Haiku's cacheable-prefix minimum; caching is inert until the
+  // tool surface grows (Phase 4 quest tools) — recalibrate then.
+  const minRatio = Number(process.env.EVAL_MIN_CACHE_RATIO ?? '0');
   console.log(`Cache-read ratio: ${(cacheRatio * 100).toFixed(1)}% (threshold ${(minRatio * 100).toFixed(0)}%)`);
   if (cacheRatio < minRatio) process.exitCode = 1;   // report still prints in full
 
