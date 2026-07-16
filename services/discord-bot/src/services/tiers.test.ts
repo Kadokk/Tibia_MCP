@@ -51,6 +51,14 @@ describe('getTierLimits', () => {
     expect(getTierLimits('disabled').memoryFacts).toBe(0);
   });
 
+  it('caps tracked quests per tier (free = small fair-use cap)', () => {
+    expect(getTierLimits('free').trackedQuests).toBe(3);
+    expect(getTierLimits('pro').trackedQuests).toBe(Number.MAX_SAFE_INTEGER);
+    expect(getTierLimits('guild_pro').trackedQuests).toBe(Number.MAX_SAFE_INTEGER);
+    expect(getTierLimits('admin').trackedQuests).toBe(Number.MAX_SAFE_INTEGER);
+    expect(getTierLimits('disabled').trackedQuests).toBe(0);
+  });
+
   it('returns frozen copies to prevent tier limit mutation', () => {
     const limits = getTierLimits('free');
     expect(Object.isFrozen(limits)).toBe(true);
