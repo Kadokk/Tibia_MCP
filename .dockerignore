@@ -1,0 +1,21 @@
+# Keep the Docker build context small. The Dockerfile COPYs an explicit allowlist
+# (CMakeLists.txt, src/, tests/, services/discord-bot/{package*.json,src,db}), so
+# everything here is safety/size only — excluding it changes nothing in the image.
+
+.git/
+.playwright-mcp/
+.claude/
+docs/
+tools/
+node_modules/
+services/discord-bot/node_modules/
+services/discord-bot/dist/
+build/
+build*/
+
+# Local runtime state — never belongs in a build context
+.env
+*.log
+*.db
+*.db-shm
+*.db-wal

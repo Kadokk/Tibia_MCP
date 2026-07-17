@@ -1,50 +1,62 @@
-# Tibia-MCP
+# Tibia-MCP / TibiaEdge
 
-A C++ MCP server for the Tibia MMORPG, plus a TypeScript Discord bot (`TibiaEdge`) intended as the
-commercial front-end. The long-term goal is a **Tibia market-intelligence SaaS** built on data the
-public APIs expose (TibiaData + TibiaWiki/Bazaar), surfaced through an AI assistant.
+**TibiaEdge** — an AI assistant for the Tibia MMORPG, delivered as a Discord bot backed by a C++
+MCP data server. Freemium SaaS direction. All data comes from public, ToS-legal sources
+(TibiaData API + TibiaWiki/Bazaar); packet reading is permanently out of scope.
 
-> **Current product direction:** the **TibiaEdge AI assistant** — see
-> [`docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md`](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md)
-> and the Phase 0/1 implementation plans in [`docs/superpowers/plans/`](docs/superpowers/plans/).
-
-> **Where we stand (2026-07-14):** the read-only data MCP is solid and well-tested (14 tools). The
-> live trade-channel listener, trade parser, and protocol library have been **archived** (git tag
-> `archive/live-listener`) — packet reading is permanently out of scope. The Discord bot is clean
-> TDD scaffolding that does not yet do anything at runtime.
+> **Where we stand (2026-07-17):** v1 (Phases 0–4) is **code-complete and merged to `main`**.
+> All tests green: 58 C++ + 300 TypeScript. What remains before the `v0.2.0-beta` tag is the
+> first live deployment and the live-verification gate in
+> [`docs/beta-deployment-checklist.md`](docs/beta-deployment-checklist.md) — work it in order;
+> the tag comes last.
 
 ## Component status
 
 | Component | Path | Status | Notes |
 |---|---|---|---|
-| **Data MCP** (`tibia-mcp`) | `src/mcp/`, `src/sources/`, `src/cache/` | ✅ Working, tested | 14 tools; TibiaData API + TibiaWiki/Bazaar scraping (incl. `refresh_bazaar_history` + `valuate_auction` for ended-auction comparables); SQLite cache. ToS-legal. |
-| **Protocol library** | archived | 📦 Archived (git tag `archive/live-listener`) | packet reading is permanently out of scope — see docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md. |
-| **Trade listener** | archived | 📦 Archived (git tag `archive/live-listener`) | packet reading is permanently out of scope — see docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md. |
-| **Trade parser** | archived | 📦 Archived (git tag `archive/live-listener`) | packet reading is permanently out of scope — see docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md. |
-| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | 🚧 Scaffolding only | Disciplined tests, but all commands are placeholders and repositories are type-only stubs. No migration runner. |
+| **Data MCP** (`tibia-mcp`) | `src/` | ✅ Working, tested | 14 read-only tools over stdio JSON-RPC; TibiaData API + TibiaWiki/Bazaar scraping (incl. NPC buy/sell prices, `refresh_bazaar_history` + `valuate_auction` for ended-auction comparables); SQLite cache (WAL, per-tool TTLs, stale fallback). 58 tests. |
+| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | ✅ v1 code-complete | 13 slash commands (12 fully wired; `/setup` still a placeholder). `/ask` agent loop on Claude Haiku 4.5 with prompt caching and a daily spend circuit breaker; second-brain memory (capture → distill → recall); quest companion with a TibiaWiki quest importer; 4 background schedulers; Postgres with 4 auto-applied migrations. 300 vitest tests; 12/12 golden-set eval. Live smoke tests pending first deploy. |
+| **Protocol library / trade listener / parser** | archived | 📦 Archived (git tag `archive/live-listener`) | Packet reading is permanently out of scope — see the [assistant design spec](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md). |
 
 Legend: ✅ working · ⚠️ partial · 🚧 scaffolding · ⛔ blocked · 📦 archived.
 
+## What the bot does
+
+- **`/ask`** — the AI assistant: an agent loop over the 14 MCP data tools plus local memory
+  tools, personalized from linked characters, distilled memories, goals, and tracked quests.
+  Tiered quotas, per-day spend cap, prompt caching.
+- **`/link` · `/profile`** — link Tibia characters (verified via a code in the character
+  comment on tibia.com), background profile sync, auction-seeded quest progress (`/link seed`).
+- **`/memory` · `/goals` · `/settings`** — the second brain: distilled facts with
+  show/forget/forget-all, goal tracking, personalization opt-out.
+- **`/quest`** — quest companion: track/list/done/next with autocomplete, level-appropriate
+  suggestions, wiki links + CC BY-SA 3.0 attribution.
+- **`/char` · `/boosted` · `/price` · `/auction`** — direct data lookups (character info,
+  boosted creature/boss, item prices, bazaar comparables).
+- **`/usage`** — tier and quota status. **`/setup`** — placeholder (post-v1).
+
 ## Architecture
 
-The `tibia-mcp` server is a single C++ process exposing 14 read-only tools over stdio JSON-RPC,
-backed by a SQLite cache (`tibia_mcp_cache.db`, WAL mode). A separate TypeScript service is the
-planned product layer.
-
 ```
-   LLM client
-      |  stdio JSON-RPC (14 tools)
-      v
-   tibia-mcp  --HTTP-->  TibiaData API / TibiaWiki / Bazaar
-      |
-      v
-   SQLite cache (WAL)  tibia_mcp_cache.db
-
-   services/discord-bot (TS)  --  planned product layer, not wired yet
+Discord
+   |
+   v
+TibiaEdge bot (Node/tsx, services/discord-bot)
+   |-- agent loop: Claude Haiku 4.5 (prompt caching, spend circuit breaker)
+   |-- Postgres: users/tiers, memory, quests (db/migrations, auto-applied on boot)
+   |-- schedulers: profile sync · memory distill · quest import · cache refresh
+   |
+   | spawns as a child process, stdio JSON-RPC (14 tools)
+   v
+tibia-mcp (C++)  --HTTP-->  TibiaData API / TibiaWiki / Bazaar
+   |
+   v
+SQLite scrape cache (WAL)  tibia_mcp_cache.db
 ```
 
 Key boundary: **C++ owns Tibia data collection (public APIs + wiki/bazaar scraping); TypeScript
-owns the Discord SaaS behavior.**
+owns the Discord SaaS behavior.** In production both run in one container next to a Postgres
+container (`docker-compose.yml`; see [`docs/deploy.md`](docs/deploy.md)).
 
 ## Build & run
 
@@ -56,57 +68,73 @@ googletest are fetched automatically.
 ```bash
 cmake -S . -B build
 cmake --build build
-ctest --test-dir build            # runs tibia-mcp-tests (52 tests)
+ctest --test-dir build            # runs tibia-mcp-tests (58 tests)
 ```
 
 Binaries land in `build/`: `tibia-mcp` (the MCP server, stdio) plus `tibia-mcp-tests`.
 
 ### Discord bot
 
-Requires Node (ESM; Node ≥ 18 recommended). From `services/discord-bot/`:
+Requires Node ≥ 18 (ESM; Node 22 in the Docker image). From `services/discord-bot/`:
 
 ```bash
-npm install
+npm ci
 npm run typecheck
-npm test                 # vitest
-npm run build            # tsc -> dist/
+npm test                 # vitest — 300 tests
+npm run eval             # 12-case golden-set eval; needs ANTHROPIC_API_KEY (~$0.07/run)
+npm run import:quests    # full TibiaWiki quest import; needs DATABASE_URL
 ```
 
-See [`services/discord-bot/README.md`](services/discord-bot/README.md) for env setup. The bot is
-not yet wired to a database; commands return placeholder responses.
+See [`services/discord-bot/README.md`](services/discord-bot/README.md) for local env setup.
+
+### Production (Docker Compose)
+
+```bash
+cp services/discord-bot/.env.example .env   # then fill it in
+docker compose build
+docker compose up -d
+```
+
+Full runbook — VPS sizing, `.env` reference, backups, the spend-cap knob — in
+[`docs/deploy.md`](docs/deploy.md).
 
 ## Configuration
 
-Local config lives in `.env` at the repo root (gitignored — **never commit it**). For the data MCP
-server the only relevant variable is:
-
-| Variable | Purpose |
-|---|---|
-| `TIBIA_MCP_LOG_LEVEL` | `DEBUG` / `INFO` / `WARN` / `ERROR`. |
-
-> The `TIBIA_LISTENER_*` and `ANTHROPIC_API_KEY` variables belonged to the archived listener/parser
-> pipeline (git tag `archive/live-listener`) and are no longer read by the active tree.
+All config lives in `.env` at the repo root (gitignored — **never commit it**). The full
+variable table is in [`docs/deploy.md`](docs/deploy.md) §4; the essentials are `DISCORD_TOKEN`,
+`DISCORD_CLIENT_ID`, `POSTGRES_PASSWORD`, `ANTHROPIC_API_KEY`, and the
+`AI_DAILY_SPEND_CAP_USD` circuit breaker. The C++ server itself reads only
+`TIBIA_MCP_LOG_LEVEL` (`DEBUG`/`INFO`/`WARN`/`ERROR`).
 
 ## Documentation
 
 | Doc | What it covers |
 |---|---|
-| [`docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md`](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md) | **Current product direction** — the TibiaEdge AI assistant design. |
-| [`docs/superpowers/plans/`](docs/superpowers/plans/) | Implementation plans, including the Phase 0/1 TibiaEdge plans. |
-| [`docs/superpowers/specs/`](docs/superpowers/specs/) | Design specs for the sub-projects. *Aspirational — describe intent, not current state.* |
-| [`docs/AUDIT-2026-06-14.md`](docs/AUDIT-2026-06-14.md) | Standing audit from before the archive — historical context on where the project stood. |
+| [`docs/beta-deployment-checklist.md`](docs/beta-deployment-checklist.md) | **The beta gate.** Live-verify backlog, deployment drills, and Phase 2/3/4 live smoke tests — all pending the first deploy. `v0.2.0-beta` is tagged only when it's done. |
+| [`docs/deploy.md`](docs/deploy.md) | Production runbook: VPS setup, Compose, `.env` reference, backups, spend cap. |
+| [`docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md`](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md) | Product direction — the TibiaEdge AI assistant design. |
+| [`docs/superpowers/specs/2026-07-15-tibiaedge-second-brain-design.md`](docs/superpowers/specs/2026-07-15-tibiaedge-second-brain-design.md) | The second-brain (memory/personalization) design behind Phases 2–4. |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | Phase-by-phase implementation plans (Phase 0 hygiene → Phase 4 quest companion). |
+| [`docs/AUDIT-2026-06-14.md`](docs/AUDIT-2026-06-14.md) | Historical audit from before the listener archive. |
 | [`services/discord-bot/README.md`](services/discord-bot/README.md) | Discord bot local setup. |
 
-## Sub-project history
+## History
 
-1. **Data MCP** — complete. 14 MCP tools (incl. `refresh_bazaar_history` + `valuate_auction`), SQLite cache with per-tool TTLs + stale fallback.
-2. **Protocol library** — 📦 archived (git tag `archive/live-listener`); packet reading is permanently out of scope.
-3. **Trade listener + parser** — 📦 archived (git tag `archive/live-listener`); packet reading is permanently out of scope.
-4. **Productization (TibiaEdge Discord bot)** — in progress; scaffolding only.
+1. **Data MCP** — complete; 14 tools, SQLite cache.
+2. **Protocol library / trade listener / parser** — 📦 archived (git tag
+   `archive/live-listener`); packet reading permanently out of scope.
+3. **TibiaEdge v1** — complete on `main`: Phase 0 (hygiene) → Phase 1 (core assistant:
+   `/ask` agent loop, quotas, Docker) → Phase 2 (identity: character links, profiles) →
+   Phase 3 (memory distillation & continuity) → Phase 4 (quest companion), merged 2026-07-16.
 
-## Roadmap / next steps
+Quest/wiki content is used under **CC BY-SA 3.0** (TibiaWiki); the bot attributes and links
+back to the wiki in its answers.
 
-With the packet-listener pipeline archived, the product direction is the **TibiaEdge AI assistant**
-built on the already-working, ToS-legal data MCP (TibiaData + TibiaWiki/Bazaar). See the
-[TibiaEdge spec](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md) and the Phase
-0/1 plans for the sequence.
+## Roadmap
+
+1. **First live deployment** (`docs/deploy.md`) and the full
+   [beta checklist](docs/beta-deployment-checklist.md) — live smoke tests for Phases 1–4,
+   full quest import (≥ 400 quests), caching/quota/circuit-breaker drills.
+2. **`v0.2.0-beta` tag** (human operator, after the checklist) and rollout to 2–3 friendly
+   Discord servers with a week of usage/spend tracking.
+3. **Phase 5 planning** — next feature phase, scoped after beta feedback.
