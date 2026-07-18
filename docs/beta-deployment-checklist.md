@@ -47,6 +47,16 @@ build's actual verification state.
   tests, `cache_control` placement confirmed on system + last tool); the 4096-token minimum
   cacheable prefix can't be exercised with a fake Anthropic client. Satisfied by §2 Step 4
   below — do it once, it covers both.
+  **⚠️ FOUND DEAD LIVE, THEN FIXED (2026-07-17):** the first real `/ask` pair recorded
+  `cache_creation_tokens = cache_read_tokens = 0`. Live probes from inside the container
+  isolated the cause: `countTokens` reports ~330 tokens of API-injected tool scaffolding
+  that cache breakpoints never cover, so the Task 16 "padded to 4,360 ≥ 4,224" prefix was
+  effectively ~4,036 — just under the 4,096 minimum. Baseline (no-context) requests never
+  cached; the Phase 4 eval's 29.8% gate pass rode on context-bearing cases. Fixed by
+  growing the TIBIA DOMAIN NOTES (+~430 tokens → 4,793 counted / ~4,469 effective) and
+  raising the `eval:prefix` gate to ≥ 4,600 with the overhead documented. Verified live
+  in the production container: Q1 creates 4,469 + reads 4,469 (round 2); Q2 reads 8,938
+  with zero creation. Final confirmation with real Discord `/ask` traffic per §2 Step 4.
 - **Task 13 — Docker image build + compose bring-up** (2026-07-15): `docker compose build
   && docker compose up -d`, then in a test guild: `/boosted` and `/ask what is a dragon?`
   end-to-end. Only `docker compose config` (YAML parse + `${POSTGRES_PASSWORD}`

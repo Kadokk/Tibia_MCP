@@ -324,10 +324,13 @@ async function main(): Promise<void> {
   // Prompt-cache health gate: if the static prefix (system + tools) is not being
   // reused across cases, the cache-read ratio collapses.
   const cacheRatio = totalCacheRead / Math.max(1, totalAllInInput);
-  // Caching is live: the padded ≥4224-token prefix (system + quest tools) now exceeds
-  // Haiku's cacheable minimum. Default gate ≈ 70% of the first live 20-case run's
-  // observed 28.1% cache-read ratio. Recalibrate when the golden set grows to 30–50
-  // (more single-round cases lower the natural ratio).
+  // Caching is live: the padded ≥4600-token prefix (system + quest tools) clears
+  // Haiku's cacheable minimum INCLUDING the ~330 tokens of API tool scaffolding
+  // that countTokens reports but cache breakpoints never cover (see
+  // prefixTokens.ts — at the old ≥4224 target, baseline no-context requests
+  // silently didn't cache at all). Default gate ≈ 70% of the first live 20-case
+  // run's observed 28.1% cache-read ratio. Recalibrate when the golden set grows
+  // to 30–50 (more single-round cases lower the natural ratio).
   const minRatio = Number(process.env.EVAL_MIN_CACHE_RATIO ?? '0.19');
   console.log(`Cache-read ratio: ${(cacheRatio * 100).toFixed(1)}% (threshold ${(minRatio * 100).toFixed(0)}%)`);
   if (cacheRatio < minRatio) process.exitCode = 1;   // report still prints in full

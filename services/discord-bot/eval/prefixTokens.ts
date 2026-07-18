@@ -50,7 +50,13 @@ async function main(): Promise<void> {
     tools,
     messages: [{ role: 'user', content: 'ping' }]
   });
-  const MIN = 4224;   // Haiku cacheable minimum 4096 + headroom
+  // countTokens OVERCOUNTS the cacheable span: it includes ~330 tokens of
+  // API-injected tool scaffolding plus the probe message, none of which the
+  // cache breakpoints cover. Measured live 2026-07-17 (claude-haiku-4-5):
+  // a 4,362-token request created NO cache (effective ~4,036 < 4,096 minimum),
+  // while 4,676 total created exactly 4,350. So the raw count must clear
+  // 4096 (minimum) + ~330 (uncovered overhead) + headroom.
+  const MIN = 4600;
   console.log(`Static prefix: ${res.input_tokens} tokens (needs ≥ ${MIN})`);
   if (res.input_tokens < MIN) process.exit(1);
 }
