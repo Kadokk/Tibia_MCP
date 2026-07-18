@@ -6,7 +6,9 @@ WORKDIR /src
 COPY CMakeLists.txt ./
 COPY src ./src
 COPY tests ./tests
-RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target tibia-mcp -j
+# -j2, not -j: unbounded parallel g++ exhausts memory on small hosts (seen live:
+# "cannot allocate memory" in the Docker Desktop VM; deploy.md's 1 GB VPS warning)
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target tibia-mcp -j2
 
 # Stage 2: install bot dependencies
 FROM node:22-bookworm-slim AS bot-deps
