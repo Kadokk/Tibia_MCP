@@ -12,11 +12,15 @@ TEST(HttpClientLiveTest, SuccessfulGet) {
     EXPECT_FALSE(result.body.empty());
 }
 
-TEST(HttpClientLiveTest, NotFoundReturns404) {
+// HTTP error statuses (4xx/5xx) must NOT count as success: a Cloudflare 403
+// challenge page was parsed as real item data ("Item: Just a moment...") because
+// tools gate on .success alone. status_code stays available for callers that care.
+TEST(HttpClientLiveTest, HttpErrorStatusIsNotSuccess) {
     HttpClient client;
     auto result = client.get("https://api.tibiadata.com/v4/nonexistent");
-    EXPECT_TRUE(result.success);
+    EXPECT_FALSE(result.success);
     EXPECT_EQ(result.status_code, 404);
+    EXPECT_FALSE(result.error.empty());
 }
 
 // --- Tests that do not require network ---

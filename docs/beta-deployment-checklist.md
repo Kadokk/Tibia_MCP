@@ -17,10 +17,31 @@ build's actual verification state.
 - **Task 4 — wiki NPC prices** (2026-07-15): `search_item` should include `Buy From`/`Sell
   To` lines on a live query (e.g. "magic plate armor"). Parser logic unit-verified (41/41
   tests); live fetch never run (Cloudflare blocks `tibia.fandom.com` from the dev sandbox).
+  **✅ VERIFIED LIVE (2026-07-17)** — but only after a real fix, not just deployment: the
+  Cloudflare block turned out to apply to *any* non-browser client (403 on raw `/wiki/` and
+  `Special:Search` fetches, any user-agent), not just the dev sandbox, **and** the wiki's
+  live markup had drifted to Fandom portable infoboxes (labels renamed: Arm→Armor,
+  Hit Points→Health, Formula→Words, …), so the old parsers extracted nothing even given the
+  HTML. Fixed by routing all 5 wiki tools through the MediaWiki API (`api.php` answers 200
+  headless; `action=parse&prop=text&redirects=1` for pages, `action=query&list=search` for
+  search), adding portable-infobox + NPC-trades parsing, decoding HTML entities, and making
+  `HttpClient` treat HTTP ≥400 as failure (a 403 challenge page was previously parsed as an
+  item titled "Just a moment..."). 68/68 C++ tests (10 new, real API fixtures); verified
+  live: MPA returns full stats + `Sell To: H.L. (Outlaw Camp): 720, Rashid (Varies):
+  90,000, …`. Known cosmetic nits: footnote markers glue to NPC names ("Rashid2"),
+  concatenated link text ("Body EquipmentArmors").
 - **Task 5 — ended-auction scraping** (2026-07-15): `refresh_bazaar_history` should fetch
   and store real past-auction records from `tibia.com`'s past-trades pages. Parser/store
   logic unit-verified (48/48 tests) via a hand-crafted fixture; live fetch never run (same
   Cloudflare block).
+  **❌ BLOCKED LIVE (2026-07-17)**: `www.tibia.com` 403s libcurl at the TLS-fingerprint
+  level (any user-agent; Playwright passes — consistent with the Phase 4 planning finding).
+  Likely also affects `search_bazaar`/`lookup_bazaar_auction` live fetches; without stored
+  history `valuate_auction` has no comparables. The `HttpClient` ≥400 fix at least makes the
+  tool report the failure instead of "stored 0 auctions". Options under evaluation:
+  curl-impersonate (Chrome-fingerprint libcurl), a Playwright sidecar, or owner-re-scoping
+  bazaar tools as degraded for beta. Owner decision pending — this item still gates the tag
+  unless consciously re-scoped.
 - **Task 8 — Haiku 4.5 prompt caching** (2026-07-15): confirm `usage.cache_read_input_tokens
   > 0` on the *second* `/ask` question in a session. Agent-loop logic unit-verified (76/76
   tests, `cache_control` placement confirmed on system + last tool); the 4096-token minimum
@@ -34,6 +55,12 @@ build's actual verification state.
   (`docker ps` → "Cannot connect to the Docker daemon"), so the actual image build and
   container bring-up have never run anywhere yet.
   **Update (2026-07-15):** `docker compose build` now passes locally end-to-end (after the `fix/cmake-sqlite-target` `SQLite::SQLite3` link-target fix); container bring-up + a live `/boosted`/`/ask` smoke test with a real Discord token is still pending.
+  **Update (2026-07-17):** full local bring-up done — `.env` reconstructed from Keychain
+  (`discord-tibiaedge`, `anthropic-tibiaedge`) + the 2026-07-15 dress-rehearsal IDs, fresh
+  volumes, `docker compose up -d` → migrations 001–004 applied, 14 MCP tools registered,
+  "TibiaEdge Discord bot ready"; containerized `tibia-mcp` answers initialize/tools/list
+  over stdio. Remaining for this item: the in-guild `/boosted` + `/ask` smoke (needs the
+  operator in the test guild).
 - **Task 14 Step 1 — golden-set eval** (2026-07-15, updated 2026-07-15): `cd
   services/discord-bot && ANTHROPIC_API_KEY=... npm run eval` initially couldn't run at
   all in the dev sandbox — no key was provisioned there (checked: not in the shell env

@@ -33,24 +33,28 @@ ToolResult SearchQuestTool::execute(const nlohmann::json& params) {
         return {cached->value, false};
     }
 
-    // Try direct page fetch first
-    auto resp = http_.get(TibiaWiki::page_url(query));
+    // Direct page fetch via the MediaWiki API (raw /wiki/ fetches are
+    // Cloudflare-blocked for non-browser clients)
+    auto resp = http_.get(TibiaWiki::api_page_url(query));
     if (resp.success) {
-        std::string result = TibiaWiki::parse_quest(resp.body);
-        if (!result.empty() && result.find("Error") == std::string::npos) {
-            cache_.put(key, result, 604800);
-            return {result, false};
+        std::string html = TibiaWiki::unwrap_api_page(resp.body);
+        if (!html.empty()) {
+            std::string result = TibiaWiki::parse_quest(html);
+            if (!result.empty() && result.find("Error") == std::string::npos) {
+                cache_.put(key, result, 604800);
+                return {result, false};
+            }
         }
     }
 
-    // Fallback to search URL
-    auto search_resp = http_.get(TibiaWiki::search_url(query));
+    // Fallback: API search — return candidate pages to retry with
+    auto search_resp = http_.get(TibiaWiki::api_search_url(query));
     if (!search_resp.success) {
         if (cached) return {cached->value + "\n\n*Note: data may be stale*", false};
         return {"Error: Failed to fetch quest data — " + search_resp.error, true};
     }
 
-    std::string result = TibiaWiki::parse_quest(search_resp.body);
+    std::string result = TibiaWiki::parse_api_search_results(search_resp.body);
     cache_.put(key, result, 604800);
     return {result, false};
 }

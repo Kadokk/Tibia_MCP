@@ -75,9 +75,15 @@ HttpResponse HttpClient::get(const std::string& url) {
         response.error = curl_easy_strerror(res);
         LOG(ERROR, "HTTP GET failed: " << url << " — " << response.error);
     } else {
-        response.success = true;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response.status_code);
         LOG(DEBUG, "HTTP GET " << url << " — " << response.status_code);
+
+        // 4xx/5xx is not success: without this, tools that gate on .success alone
+        // parse error bodies as real data (e.g. a Cloudflare 403 challenge page).
+        response.success = response.status_code < 400;
+        if (!response.success) {
+            response.error = "HTTP " + std::to_string(response.status_code);
+        }
 
         if (response.status_code == 429 || response.status_code == 503) {
             LOG(WARN, "Rate limited by " << host);

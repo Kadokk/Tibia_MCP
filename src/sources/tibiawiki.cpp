@@ -1,4 +1,5 @@
 #include "sources/tibiawiki.h"
+#include <nlohmann/json.hpp>
 #include <regex>
 #include <map>
 #include <vector>
@@ -6,16 +7,70 @@
 
 namespace {
 
-// Strip HTML tags from a string, leaving only text content
+// RFC 3986 unreserved characters stay literal, plus '_' which MediaWiki titles use.
+std::string percent_encode(const std::string& s) {
+    static const char* hex = "0123456789ABCDEF";
+    std::string out;
+    for (unsigned char c : s) {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            out += static_cast<char>(c);
+        } else {
+            out += '%';
+            out += hex[c >> 4];
+            out += hex[c & 0xF];
+        }
+    }
+    return out;
+}
+
+// Strip HTML tags from a string, leaving only text content.
+// Also decodes the entities wiki markup commonly emits (&#32;, &#160;, &nbsp;, …)
+// so they never leak into user-visible tool output.
 std::string strip_tags(const std::string& html) {
     std::string result;
     bool in_tag = false;
-    for (char c : html) {
+    for (size_t i = 0; i < html.size(); ++i) {
+        char c = html[i];
         if (c == '<') {
             in_tag = true;
         } else if (c == '>') {
             in_tag = false;
         } else if (!in_tag) {
+            if (c == '&') {
+                auto semi = html.find(';', i);
+                if (semi != std::string::npos && semi - i <= 8) {
+                    std::string entity = html.substr(i + 1, semi - i - 1);
+                    std::string decoded;
+                    if (!entity.empty() && entity[0] == '#') {
+                        int code = std::atoi(entity.c_str() + 1);
+                        if (code == 160 || code < 32) {
+                            decoded = " ";  // nbsp / control chars
+                        } else if (code <= 126) {
+                            decoded = std::string(1, static_cast<char>(code));
+                        } else {
+                            // UTF-8 encode symbol code points (e.g. &#10003; = ✓)
+                            if (code <= 0x7FF) {
+                                decoded += static_cast<char>(0xC0 | (code >> 6));
+                                decoded += static_cast<char>(0x80 | (code & 0x3F));
+                            } else {
+                                decoded += static_cast<char>(0xE0 | (code >> 12));
+                                decoded += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+                                decoded += static_cast<char>(0x80 | (code & 0x3F));
+                            }
+                        }
+                    } else if (entity == "nbsp") decoded = " ";
+                    else if (entity == "amp") decoded = "&";
+                    else if (entity == "lt") decoded = "<";
+                    else if (entity == "gt") decoded = ">";
+                    else if (entity == "quot") decoded = "\"";
+                    else if (entity == "apos") decoded = "'";
+                    if (!decoded.empty()) {
+                        result += decoded;
+                        i = semi;
+                        continue;
+                    }
+                }
+            }
             result += c;
         }
     }
@@ -51,10 +106,76 @@ std::string extract_title(const std::string& html) {
     return "";
 }
 
+// Parse a Fandom portable infobox: <aside class="portable-infobox">, name in
+// <h2 class="... pi-title ...">, fields as pi-data-label/pi-data-value pairs.
+// This is what live pages render today; the legacy table path below covers
+// older captures.
+std::map<std::string, std::string> extract_portable_infobox(const std::string& html) {
+    std::map<std::string, std::string> result;
+
+    auto aside_pos = html.find("class=\"portable-infobox");
+    if (aside_pos == std::string::npos) return result;
+    auto aside_end = html.find("</aside>", aside_pos);
+    if (aside_end == std::string::npos) aside_end = html.size();
+    std::string aside = html.substr(aside_pos, aside_end - aside_pos);
+
+    std::smatch m;
+    std::regex title_re(R"(<h2[^>]*pi-title[^>]*>([\s\S]*?)</h2>)");
+    if (std::regex_search(aside, m, title_re)) {
+        std::string name = trim(strip_tags(m[1].str()));
+        if (!name.empty()) result["Name"] = name;
+    }
+
+    std::regex pair_re(
+        R"(<h3[^>]*pi-data-label[^>]*>([\s\S]*?)</h3>\s*<div[^>]*pi-data-value[^>]*>([\s\S]*?)</div>)");
+    auto begin = std::sregex_iterator(aside.begin(), aside.end(), pair_re);
+    for (auto it = begin; it != std::sregex_iterator(); ++it) {
+        std::string key = trim(strip_tags((*it)[1].str()));
+        std::string value = (*it)[2].str();
+        if (!key.empty() && !value.empty()) result[key] = value;
+    }
+    return result;
+}
+
+// Parse the NPC trade sections live item pages render as
+// <div class="trades" id="npc-trade-buyfrom|sellto"> with NPC/Location/Price
+// rows; a <p class="no-results"> means no trades on that side.
+std::map<std::string, std::string> extract_trades(const std::string& html) {
+    std::map<std::string, std::string> result;
+    const std::pair<const char*, const char*> sections[] = {
+        {"Buy From", "id=\"npc-trade-buyfrom\""},
+        {"Sell To", "id=\"npc-trade-sellto\""},
+    };
+    for (const auto& [label, anchor] : sections) {
+        auto pos = html.find(anchor);
+        if (pos == std::string::npos) continue;
+        auto end = html.find("</table>", pos);
+        auto no_results = html.find("no-results", pos);
+        if (end == std::string::npos || (no_results != std::string::npos && no_results < end)) continue;
+        std::string section = html.substr(pos, end - pos);
+
+        std::regex row_re(
+            R"(<tr[^>]*>\s*<td[^>]*>([\s\S]*?)</td>\s*<td[^>]*>([\s\S]*?)</td>\s*<td[^>]*>([\s\S]*?)</td>)");
+        std::string entries;
+        auto begin = std::sregex_iterator(section.begin(), section.end(), row_re);
+        for (auto it = begin; it != std::sregex_iterator(); ++it) {
+            std::string npc = trim(strip_tags((*it)[1].str()));
+            std::string loc = trim(strip_tags((*it)[2].str()));
+            std::string price = trim(strip_tags((*it)[3].str()));
+            if (npc.empty()) continue;
+            if (!entries.empty()) entries += ", ";
+            entries += npc + " (" + loc + "): " + price;
+        }
+        if (!entries.empty()) result[label] = entries;
+    }
+    return result;
+}
+
 // Parse key-value pairs from infobox table rows: <th>...</th><td>...</td>
 // Returns a map of stripped-label -> raw-td-content (HTML inside td)
 std::map<std::string, std::string> extract_infobox(const std::string& html) {
-    std::map<std::string, std::string> result;
+    std::map<std::string, std::string> result = extract_portable_infobox(html);
+    if (!result.empty()) return result;
 
     // Find infobox table
     auto infobox_pos = html.find("class=\"infobox\"");
@@ -133,6 +254,59 @@ std::string page_url(const std::string& page_name) {
     return "https://tibia.fandom.com/wiki/" + encoded;
 }
 
+std::string api_page_url(const std::string& page_name) {
+    std::string underscored = page_name;
+    std::replace(underscored.begin(), underscored.end(), ' ', '_');
+    return "https://tibia.fandom.com/api.php?action=parse&prop=text&redirects=1&format=json&page=" +
+           percent_encode(underscored);
+}
+
+std::string api_search_url(const std::string& query) {
+    return "https://tibia.fandom.com/api.php?action=query&list=search&srlimit=10&format=json&srsearch=" +
+           percent_encode(query);
+}
+
+std::string unwrap_api_page(const std::string& json_body) {
+    auto doc = nlohmann::json::parse(json_body, nullptr, false);
+    if (doc.is_discarded() || !doc.is_object() || doc.contains("error")) return "";
+
+    const auto& parse = doc.value("parse", nlohmann::json::object());
+    std::string html = parse.value("text", nlohmann::json::object()).value("*", "");
+    if (html.empty()) return "";
+
+    // parse.text is the page body only — inject the resolved title as the chrome
+    // span extract_title() already understands, so the parse_* functions work
+    // unchanged on API responses.
+    std::string title = parse.value("title", "");
+    if (!title.empty()) {
+        html = "<span class=\"mw-page-title-main\">" + title + "</span>" + html;
+    }
+    return html;
+}
+
+std::string parse_api_search_results(const std::string& json_body) {
+    std::string output = "## Search Results\n";
+
+    auto doc = nlohmann::json::parse(json_body, nullptr, false);
+    int count = 0;
+    if (!doc.is_discarded() && doc.is_object()) {
+        for (const auto& hit :
+             doc.value("query", nlohmann::json::object()).value("search", nlohmann::json::array())) {
+            std::string title = hit.value("title", "");
+            if (title.empty()) continue;
+            std::string underscored = title;
+            std::replace(underscored.begin(), underscored.end(), ' ', '_');
+            output += "- [" + title + "](https://tibia.fandom.com/wiki/" + percent_encode(underscored) + ")\n";
+            count++;
+        }
+    }
+
+    if (count == 0) {
+        output += "No results found.\n";
+    }
+    return output;
+}
+
 std::string parse_item(const std::string& html) {
     if (html.empty()) {
         return "Error: empty HTML input";
@@ -153,12 +327,19 @@ std::string parse_item(const std::string& html) {
         return "Error: could not find item name";
     }
 
+    // Live portable-infobox labels first, legacy table labels kept as fallback
+    // (each page carries only one vocabulary, so nothing prints twice).
     std::string output = "## Item: " + name + "\n";
     output += format_fields(infobox, {
-        "Arm", "Attack", "Defense", "Slot", "Type", "Classification",
-        "Weight", "Imbuement Slots", "Level Requirement", "Vocation",
-        "Value", "Marketable"
+        "Armor", "Arm", "Attack", "Defense", "Slot", "Type", "Classification",
+        "Upgrade Classification", "Weight", "Imbuing Slots", "Imbuement Slots",
+        "Level Requirement", "Vocation", "Value", "Marketable",
+        "Sold for", "Bought for"
     });
+
+    // NPC trade tables (live pages render these outside the infobox).
+    auto trades = extract_trades(html);
+    infobox.insert(trades.begin(), trades.end());
 
     // Handle Dropped By separately (may contain links)
     auto dropped_it = infobox.find("Dropped By");
@@ -200,16 +381,18 @@ std::string parse_creature(const std::string& html) {
         return "Error: could not find creature name";
     }
 
-    // Validate required fields: HP
+    // Validate required fields: HP ("Health" on live portable infoboxes)
     auto hp_it = infobox.find("Hit Points");
+    if (hp_it == infobox.end()) hp_it = infobox.find("Health");
     if (hp_it == infobox.end()) {
         return "Error: could not find creature HP for '" + name + "'";
     }
     std::string hp = trim(strip_tags(hp_it->second));
 
-    // Get experience
+    // Get experience ("Experience" on live portable infoboxes)
     std::string exp = "?";
     auto exp_it = infobox.find("Experience Points");
+    if (exp_it == infobox.end()) exp_it = infobox.find("Experience");
     if (exp_it != infobox.end()) {
         exp = trim(strip_tags(exp_it->second));
     }
@@ -218,8 +401,9 @@ std::string parse_creature(const std::string& html) {
     output += "- HP: " + hp + " | Exp: " + exp + "\n";
 
     output += format_fields(infobox, {
-        "Abilities", "Resistances", "Behavior", "Maximal Damage",
-        "Speed", "Summon", "Convince"
+        "Abilities", "Resistances", "Behavior", "Behaviour",
+        "Maximal Damage", "Est. Max Dmg", "Mitigation", "Charm Points",
+        "Difficulty", "Speed", "Summon", "Convince"
     });
 
     // Handle Location and Loot (may contain links)
@@ -263,9 +447,10 @@ std::string parse_spell(const std::string& html) {
 
     std::string output = "## Spell: " + name + "\n";
     output += format_fields(infobox, {
-        "Formula", "Mana", "Level Required", "Premium", "Type",
-        "Cooldown", "Group Cooldown", "Vocation", "Soul Points",
-        "Magic Level", "Price"
+        "Formula", "Words", "Mana", "Level Required", "Level", "Premium",
+        "Type", "Group", "Cooldown", "Individual Cooldown", "Group Cooldown",
+        "Vocation", "Soul Points", "Magic Level", "Price", "Base Power",
+        "Promotion"
     });
 
     return output;
@@ -292,7 +477,7 @@ std::string parse_quest(const std::string& html) {
 
     std::string output = "## Quest: " + name + "\n";
     output += format_fields(infobox, {
-        "Level Required", "Premium"
+        "Level Required", "Level", "Premium", "Aliases", "Quest Log"
     });
 
     // Handle fields that may contain links

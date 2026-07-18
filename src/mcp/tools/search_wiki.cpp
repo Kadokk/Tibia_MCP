@@ -33,13 +33,15 @@ ToolResult SearchWikiTool::execute(const nlohmann::json& params) {
         return {cached->value, false};
     }
 
-    auto resp = http_.get(TibiaWiki::search_url(query));
+    // API search (raw Special:Search fetches are Cloudflare-blocked for
+    // non-browser clients)
+    auto resp = http_.get(TibiaWiki::api_search_url(query));
     if (!resp.success) {
         if (cached) return {cached->value + "\n\n*Note: data may be stale*", false};
         return {"Error: Failed to fetch wiki search results — " + resp.error, true};
     }
 
-    std::string result = TibiaWiki::parse_search_results(resp.body);
+    std::string result = TibiaWiki::parse_api_search_results(resp.body);
     cache_.put(key, result, 3600);
     return {result, false};
 }
