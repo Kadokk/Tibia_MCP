@@ -82,6 +82,8 @@ build's actual verification state.
   "TibiaEdge Discord bot ready"; containerized `tibia-mcp` answers initialize/tools/list
   over stdio. Remaining for this item: the in-guild `/boosted` + `/ask` smoke (needs the
   operator in the test guild).
+  **✅ CLOSED (2026-07-19)**: `/ask` verified extensively across the 07-18/07-19 drills;
+  owner ran `/boosted` in-guild without error. Task 13 fully done.
 - **Task 14 Step 1 — golden-set eval** (2026-07-15, updated 2026-07-15): `cd
   services/discord-bot && ANTHROPIC_API_KEY=... npm run eval` initially couldn't run at
   all in the dev sandbox — no key was provisioned there (checked: not in the shell env
@@ -139,6 +141,13 @@ build's actual verification state.
 - No `.dockerignore` at the repo root — the Docker build context includes `build/`,
   `node_modules/`, and `*.db` files (inefficient, not incorrect: every `Dockerfile` `COPY`
   is an explicit path allowlist). Ticket: add one to shrink build context size/upload time.
+- `/quest next` (and `/quest check`) resolve the character via **snapshots** (they need
+  the level), while `/quest track` resolves via the **link table** — so in the ≤5-min
+  window between `/link verify` and the first sync tick, `/quest next` fails with the
+  misleading "Link a verified character first" even though the link is verified (hit
+  live 2026-07-19: verify 14:50Z, failures 14:52/14:53Z, snapshot 14:54Z, then fine).
+  Ticket: when eligibility returns `no_character` but a verified link exists, say
+  "profile still syncing — try again in a few minutes" instead.
 - `memory_enabled=false` disables context injection but NOT capture/distillation: during
   the 2026-07-19 toggle drill, the memory-off `/ask` (capture 10) was still stored as a
   `qa_turn` capture and run through the distiller (`distill_status='done'`; it happened to
@@ -252,7 +261,10 @@ TibiaEdge premium tracks unlimited quests." Autocomplete produced exact titles.
 done earlier (367 quests imported — see the ≥400 re-scope decision); items 5–6
 (`/link seed`) were blocked on the tibia.com TLS-403 — **UNBLOCKED 2026-07-19** by the
 curl-impersonate adoption (Task 5 above); they now just need a re-linked character and
-a real auction URL. Item 8 already proven by §2 Step 4 (and still climbing — 32.8k
+a real auction URL. Owner re-linked Kadokk (verify 14:50Z, first sync 14:54Z) and
+`/quest next` verified live: 5 level-appropriate suggestions with wiki links, the
+tracked quest deliberately sorted first (by design, `questRepository.nextEligible`
+ORDER BY). Only the `/link seed` half of items 5–6 remains. Item 8 already proven by §2 Step 4 (and still climbing — 32.8k
 cache-read tokens 2026-07-19).
 **Items 3–4 ✅ PASSED (2026-07-19, as admin):** `/quest list` showed all 3 tracked
 quests; a generic `/ask what should I focus on next?` named a tracked quest (context
