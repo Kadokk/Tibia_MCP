@@ -164,6 +164,12 @@ git tag v0.2.0-beta
 git log --oneline -20
 ```
 
+**✅ SIGNED OFF (2026-07-19)** — §1 fully green (Tasks 4/5/8/13/14 all live-verified),
+§2 Steps 2–4 passed, §3 tickets owned (command counter, capture-while-disabled gate,
+sync-window message), Phase 2 (item 5 waived) / Phase 3 / Phase 4 (seed half of 5–6
+consciously deferred to rollout) verified. Tag `v0.2.0-beta` created on owner
+instruction; Step 5 rollout week follows the tag per the owner re-order above.
+
 ## Phase 2 verification
 
 Phase 2 (identity & context — linked characters, per-user `/ask` personalization, profile
@@ -264,7 +270,12 @@ curl-impersonate adoption (Task 5 above); they now just need a re-linked charact
 a real auction URL. Owner re-linked Kadokk (verify 14:50Z, first sync 14:54Z) and
 `/quest next` verified live: 5 level-appropriate suggestions with wiki links, the
 tracked quest deliberately sorted first (by design, `questRepository.nextEligible`
-ORDER BY). Only the `/link seed` half of items 5–6 remains. Item 8 already proven by §2 Step 4 (and still climbing — 32.8k
+ORDER BY). Only the `/link seed` half of items 5–6 remains.
+**Owner decision (2026-07-19): seed drill SKIPPED for the tag** — the transport it
+depends on is proven live (Task 5 bazaar smoke through curl-impersonate) and the
+parse/match flow is unit-tested against a live-captured auction fixture; the owner has
+no bazaar-bought character, so the e2e seed is deferred to rollout, to be exercised by
+(or with) a real bazaar-buyer user. Item 8 already proven by §2 Step 4 (and still climbing — 32.8k
 cache-read tokens 2026-07-19).
 **Items 3–4 ✅ PASSED (2026-07-19, as admin):** `/quest list` showed all 3 tracked
 quests; a generic `/ask what should I focus on next?` named a tracked quest (context
