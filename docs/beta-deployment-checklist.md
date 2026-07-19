@@ -125,6 +125,12 @@ build's actual verification state.
 - No `.dockerignore` at the repo root — the Docker build context includes `build/`,
   `node_modules/`, and `*.db` files (inefficient, not incorrect: every `Dockerfile` `COPY`
   is an explicit path allowlist). Ticket: add one to shrink build context size/upload time.
+- `memory_enabled=false` disables context injection but NOT capture/distillation: during
+  the 2026-07-19 toggle drill, the memory-off `/ask` (capture 10) was still stored as a
+  `qa_turn` capture and run through the distiller (`distill_status='done'`; it happened to
+  produce no facts, but nothing prevents it from writing some). Privacy semantics say a
+  disabled memory should stop *recording*, not just *recall*. Ticket: gate capture insert
+  (or at minimum the distiller) on `user_settings.memory_enabled`.
 
 ## 4. Sign-off
 
@@ -186,7 +192,13 @@ a "level 210 vs 300" mismatch turned out to be input-side, corrected in DB).
 Distiller verified in DB: 6/6 captures `done`, typed PARA facts, distill cost
 metered (~$0.001/turn). Item 7 (memory toggle) was contaminated by a zombie-bot
 split-brain (old `tibiaedge-phase0` stack resurrected by a daemon restart — see
-deploy.md §5b) and is being re-run clean; item 6 (free-tier upsells) pending a
+deploy.md §5b). **Item 7 ✅ PASSED (2026-07-19)** — re-run overnight was plagued by
+three "Unknown interaction" reply failures (host/Docker VM flakiness, not bot logic:
+the settings writes landed even where the reply died), but the full off/on cycle was
+reconstructed from DB evidence: capture 9 (01:19Z, memory on) personalized with
+level/world/solo-preference; `/settings` disable landed; capture 10 (02:15Z, memory
+off) fully generic (bot asked for character name); re-enable wrote at 02:16:03Z;
+capture 11 (02:16:25Z) personalized again. Item 6 (free-tier upsells) pending a
 brief tier flip; item 8 (forget-all) deferred to after Phase 4 quest steps.
 
 ## Phase 4 verification
