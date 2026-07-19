@@ -162,8 +162,12 @@ comment-code → `/link verify` ✅ (Kadokk, Astera, main); first sync tick capt
 level 204 Elite Knight; `/profile` shows it; personalized `/ask` referenced the
 real level/vocation/world unprompted (even the recent-death context). Item 5
 (second unlinked account comparison) deferred — needs a second Discord account.
-Item 6 (`/memory forget-all` round-trip) deliberately deferred until after the
-Phase 4 quest steps so one wipe verifies both phases' forget semantics.
+**Item 6 ✅ PASSED (2026-07-19)** — combined wipe after the Phase 4 quest steps:
+`/memory forget-all` → "Done — I have forgotten everything about you." → `/memory
+show` empty (0 facts, 0 interactions); DB verified zero rows for the user across
+linked_characters, character_snapshots, captures, memory_facts, entities, relations,
+user_settings AND quest_progress, with no orphaned snapshot/relation rows anywhere;
+`quests` corpus untouched at 367.
 
 ## Phase 3 verification
 
@@ -205,7 +209,9 @@ using free `/link` personalization, and NO `memory_facts` row was written (lates
 unchanged); the qa_turn capture correctly stays `distill_status='pending'` (free
 captures are never distilled, per design); `/goals set` → upsell ("Goals are a premium
 feature… `/link` personalization stays free"), no goal fact written. Tier flipped back
-to admin after verification. Item 8 (forget-all) deferred to after Phase 4 quest steps.
+to admin after verification. **Item 8 ✅ PASSED (2026-07-19)** — same combined wipe as
+Phase 2 item 6 above: zero rows across all user-scoped tables including
+`entities`/`relations`, verified in DB. **Phase 3 is fully verified.**
 
 ## Phase 4 verification
 
@@ -223,7 +229,8 @@ to admin after verification. Item 8 (forget-all) deferred to after Phase 4 quest
 the Spider Cult, A Pirate's Death to Me — all `tracked`/`self_report`/confidence 1.0)
 and the 4th `/quest track` was refused with "You are tracking 3 quests (free cap).
 TibiaEdge premium tracks unlimited quests." Autocomplete produced exact titles.
-Item 7's forget-all half runs with the combined Phase 2/3 item-8 wipe. Item 2 largely
+**Item 7 second half ✅ PASSED (2026-07-19)** — after the combined forget-all wipe,
+`quest_progress` rows are gone while the `quests` corpus is intact (367). Item 7 done. Item 2 largely
 done earlier (367 quests imported — see the ≥400 re-scope decision); items 5–6
 (`/link seed`) blocked on the tibia.com TLS-403 / curl-impersonate decision; item 8
 already proven by §2 Step 4 (and still climbing — 32.8k cache-read tokens 2026-07-19).
