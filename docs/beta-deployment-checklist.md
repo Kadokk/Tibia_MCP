@@ -224,6 +224,12 @@ the Spider Cult, A Pirate's Death to Me — all `tracked`/`self_report`/confiden
 and the 4th `/quest track` was refused with "You are tracking 3 quests (free cap).
 TibiaEdge premium tracks unlimited quests." Autocomplete produced exact titles.
 Item 7's forget-all half runs with the combined Phase 2/3 item-8 wipe. Item 2 largely
-done earlier (367 quests imported — see the ≥400 re-scope decision); items 3–4 pending
-as admin; items 5–6 (`/link seed`) blocked on the tibia.com TLS-403 / curl-impersonate
-decision; item 8 already proven by §2 Step 4.
+done earlier (367 quests imported — see the ≥400 re-scope decision); items 5–6
+(`/link seed`) blocked on the tibia.com TLS-403 / curl-impersonate decision; item 8
+already proven by §2 Step 4 (and still climbing — 32.8k cache-read tokens 2026-07-19).
+**Items 3–4 ✅ PASSED (2026-07-19, as admin):** `/quest list` showed all 3 tracked
+quests; a generic `/ask what should I focus on next?` named a tracked quest (context
+injection) alongside level/world/goal personalization; the Spider Cult `/ask` answered
+with corpus-grounded requirements (level 42 min / 45 rec — exact match to the imported
+quest row, not model prior), item checklist (shovel/rope), TibiaWiki link, and the
+CC BY-SA attribution line. Owner confirmed link + attribution rendered in Discord.
