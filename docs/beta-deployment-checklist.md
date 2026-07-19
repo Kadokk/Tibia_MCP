@@ -40,8 +40,19 @@ build's actual verification state.
   history `valuate_auction` has no comparables. The `HttpClient` ≥400 fix at least makes the
   tool report the failure instead of "stored 0 auctions". Options under evaluation:
   curl-impersonate (Chrome-fingerprint libcurl), a Playwright sidecar, or owner-re-scoping
-  bazaar tools as degraded for beta. Owner decision pending — this item still gates the tag
-  unless consciously re-scoped.
+  bazaar tools as degraded for beta. **Owner decision (2026-07-19): ADOPT curl-impersonate**
+  — proven live (chrome116 → 200 with real auction content); integration = LD_PRELOAD of
+  `libcurl-impersonate-chrome` in the runtime image, zero code change. Live verification of
+  `refresh_bazaar_history` through the impersonated transport completes this item.
+  **✅ VERIFIED LIVE (2026-07-19)**: integrated as a pinned v0.6.1 download stage + a
+  wrapper script (`tibia-mcp-impersonate`) that scopes `LD_PRELOAD`/`CURL_IMPERSONATE=chrome116`
+  to the C++ MCP binary only (node never loads it), plus a 3-line guard in `client.cpp` so
+  the impersonation profile owns the User-Agent (a Chrome TLS fingerprint with a
+  "TibiaMCP/1.0" UA is an inconsistency Cloudflare can flag). Smoke through the rebuilt
+  image against live tibia.com: "Fetched 1 pages, stored 25 auctions"; production cache then
+  seeded with 3 pages / 75 auctions so `valuate_auction` has comparables. Wiki tools
+  re-verified through the same transport (MPA stats + NPC prices). 68/68 C++ tests.
+  This also unblocks Phase 4 items 5–6 (`/link seed`).
 - **Task 8 — Haiku 4.5 prompt caching** (2026-07-15): confirm `usage.cache_read_input_tokens
   > 0` on the *second* `/ask` question in a session. Agent-loop logic unit-verified (76/76
   tests, `cache_control` placement confirmed on system + last tool); the 4096-token minimum
@@ -109,6 +120,9 @@ build's actual verification state.
 - **Step 5 — Beta rollout**: invite the bot to 2–3 friendly Discord servers, pin a short
   "how to use TibiaEdge" message, create a feedback channel. Track for one week: DAU,
   questions/day, spend/day, top failure answers.
+- **Owner re-order (2026-07-19): the tag comes BEFORE the Step 5 rollout week** — the
+  tag names the exact build the beta servers receive; rollout feedback drives v0.2.x.
+  Step 5 remains open work after tagging.
 - **Step 6 — Tag**: only after every item in §1 and Steps 2–5 above are confirmed —
   `git tag v0.2.0-beta && git log --oneline -20` (include that summary in the final
   report). **This step was deliberately withheld from the automated build — the human
@@ -162,6 +176,8 @@ comment-code → `/link verify` ✅ (Kadokk, Astera, main); first sync tick capt
 level 204 Elite Knight; `/profile` shows it; personalized `/ask` referenced the
 real level/vocation/world unprompted (even the recent-death context). Item 5
 (second unlinked account comparison) deferred — needs a second Discord account.
+**Owner decision (2026-07-19): WAIVED** — beta-rollout users are unlinked by
+definition; their first real questions exercise exactly this path in Step 5 traffic.
 **Item 6 ✅ PASSED (2026-07-19)** — combined wipe after the Phase 4 quest steps:
 `/memory forget-all` → "Done — I have forgotten everything about you." → `/memory
 show` empty (0 facts, 0 interactions); DB verified zero rows for the user across
@@ -217,6 +233,8 @@ Phase 2 item 6 above: zero rows across all user-scoped tables including
 
 1. `docker compose up --build` — migration 004 applies; quest-import scheduler start logged (or disabled via `QUEST_IMPORT_ENABLED=false`).
 2. Full import: `npm run import:quests` → `SELECT COUNT(*) FROM quests` ≥ 400; `wiki_import_runs` row `done`; spot-check 3 quests for sane steps + wiki links (exit criterion 2).
+   **Owner re-scope (2026-07-19): criterion is now = 367** — the full TibiaWiki quest
+   corpus is 367 pages; the ≥400 estimate overshot reality. Import complete at 367 ✅.
 3. `/quest track` autocomplete suggests titles after 3 letters; track → `/quest list` shows it; a later `/ask` mentions the tracked quest (context injection).
 4. `/ask what do I need for the Against the Spider Cult quest?` → steps + wiki link + attribution.
 5. Fresh-user seed flow (exit criterion 1): `/link add` a bazaar-bought character → `/link seed auction:<URL>` → summary with matched counts → `/quest next` returns a level-appropriate quest with a wiki link and excludes seeded-done lines.
@@ -232,8 +250,10 @@ TibiaEdge premium tracks unlimited quests." Autocomplete produced exact titles.
 **Item 7 second half ✅ PASSED (2026-07-19)** — after the combined forget-all wipe,
 `quest_progress` rows are gone while the `quests` corpus is intact (367). Item 7 done. Item 2 largely
 done earlier (367 quests imported — see the ≥400 re-scope decision); items 5–6
-(`/link seed`) blocked on the tibia.com TLS-403 / curl-impersonate decision; item 8
-already proven by §2 Step 4 (and still climbing — 32.8k cache-read tokens 2026-07-19).
+(`/link seed`) were blocked on the tibia.com TLS-403 — **UNBLOCKED 2026-07-19** by the
+curl-impersonate adoption (Task 5 above); they now just need a re-linked character and
+a real auction URL. Item 8 already proven by §2 Step 4 (and still climbing — 32.8k
+cache-read tokens 2026-07-19).
 **Items 3–4 ✅ PASSED (2026-07-19, as admin):** `/quest list` showed all 3 tracked
 quests; a generic `/ask what should I focus on next?` named a tracked quest (context
 injection) alongside level/world/goal personalization; the Spider Cult `/ask` answered

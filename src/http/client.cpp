@@ -1,6 +1,7 @@
 #include "http/client.h"
 #include "log.h"
 #include <curl/curl.h>
+#include <cstdlib>
 #include <thread>
 
 namespace {
@@ -68,7 +69,12 @@ HttpResponse HttpClient::get(const std::string& url) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "TibiaMCP/1.0");
+    // Under libcurl-impersonate (CURL_IMPERSONATE set), the impersonation profile
+    // must own the User-Agent — overriding it pairs a Chrome TLS fingerprint with
+    // a non-Chrome UA, which Cloudflare can flag as inconsistent.
+    if (!std::getenv("CURL_IMPERSONATE")) {
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "TibiaMCP/1.0");
+    }
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
