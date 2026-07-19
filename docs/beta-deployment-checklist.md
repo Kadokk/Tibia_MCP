@@ -198,8 +198,14 @@ the settings writes landed even where the reply died), but the full off/on cycle
 reconstructed from DB evidence: capture 9 (01:19Z, memory on) personalized with
 level/world/solo-preference; `/settings` disable landed; capture 10 (02:15Z, memory
 off) fully generic (bot asked for character name); re-enable wrote at 02:16:03Z;
-capture 11 (02:16:25Z) personalized again. Item 6 (free-tier upsells) pending a
-brief tier flip; item 8 (forget-all) deferred to after Phase 4 quest steps.
+capture 11 (02:16:25Z) personalized again. **Item 6 ✅ PASSED (2026-07-19)** via a
+brief `user_tiers` flip to `free`: `/ask remember that I like team hunts` → answered
+with the premium notice ("long-term memory storage is a premium feature") while still
+using free `/link` personalization, and NO `memory_facts` row was written (latest fact
+unchanged); the qa_turn capture correctly stays `distill_status='pending'` (free
+captures are never distilled, per design); `/goals set` → upsell ("Goals are a premium
+feature… `/link` personalization stays free"), no goal fact written. Tier flipped back
+to admin after verification. Item 8 (forget-all) deferred to after Phase 4 quest steps.
 
 ## Phase 4 verification
 
@@ -211,3 +217,13 @@ brief tier flip; item 8 (forget-all) deferred to after Phase 4 quest steps.
 6. `/quest done` a seeded quest, re-run `/link seed` with the same auction → the self-report survives (no downgrade).
 7. Free account: 4th `/quest track` → upsell; `/quest` data intact after `/memory forget everything` EXCEPT progress rows (they must be gone).
 8. Caching live: two `/ask` in a row → second row in `ai_usage` has `cache_read_tokens > 0`.
+
+**Phase 4 progress (2026-07-19):** item 7 first half ✅ — during the free-tier flip
+(same drill as Phase 3 item 6) the owner tracked 3 quests (Barbarian Outfits, Against
+the Spider Cult, A Pirate's Death to Me — all `tracked`/`self_report`/confidence 1.0)
+and the 4th `/quest track` was refused with "You are tracking 3 quests (free cap).
+TibiaEdge premium tracks unlimited quests." Autocomplete produced exact titles.
+Item 7's forget-all half runs with the combined Phase 2/3 item-8 wipe. Item 2 largely
+done earlier (367 quests imported — see the ≥400 re-scope decision); items 3–4 pending
+as admin; items 5–6 (`/link seed`) blocked on the tibia.com TLS-403 / curl-impersonate
+decision; item 8 already proven by §2 Step 4.
