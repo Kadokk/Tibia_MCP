@@ -92,12 +92,20 @@ build's actual verification state.
 - **Step 2 — Circuit-breaker drill**: set `AI_DAILY_SPEND_CAP_USD=0.000001`, restart the
   stack, `/ask` as a free user → expect the "free capacity used up" message. Restore the
   real cap afterward.
+  **✅ PASSED (2026-07-18)**: with the tiny cap the bot replied ephemerally "Today's free
+  AI capacity is used up — try again tomorrow, or upgrade to premium." and the refused ask
+  was NOT metered (`questions` unchanged). Real cap restored and verified in-container.
 - **Step 3 — Quota drill**: ask 6 questions as a free user → the 6th should be refused
   with the tier-limit message.
+  **✅ PASSED (2026-07-18)**: 5th question answered normally, 6th refused with the
+  tier-limit message; `ai_usage.questions = 5` (refusals not counted).
 - **Step 4 — Cache check**: after 2+ `/ask` questions in one session, temporarily log
   `usage.cache_read_input_tokens` from the agent loop and confirm it's `> 0` on the
   second question onward. This is the same check as the Task 8 backlog item above —
   doing it once satisfies both. Note the finding in `docs/deploy.md`.
+  **✅ PASSED (2026-07-18)** — verified from `ai_usage` (no temporary logging needed):
+  after the Task 8 padding fix, real `/ask` traffic shows `cache_creation_tokens = 4469`
+  once and steadily growing `cache_read_tokens` (22,345 after five questions).
 - **Step 5 — Beta rollout**: invite the bot to 2–3 friendly Discord servers, pin a short
   "how to use TibiaEdge" message, create a feedback channel. Track for one week: DAU,
   questions/day, spend/day, top failure answers.
@@ -143,6 +151,14 @@ deploy operator (append-only; do not reorder the Phase 1 items above).
 5. From a second (unlinked) Discord account: same question → generic answer; compare `ai_usage.cache_read_tokens` for both users across two consecutive questions — the unlinked user's cache behavior matches pre-phase-2.
 6. `/memory show` → captures counted; `/memory forget-all` → confirm → re-run `/memory show` → empty; check DB: zero rows for the user in all seven tables.
 
+**Phase 2 progress (2026-07-18):** items 1–4 ✅ — bring-up done; `/link add` →
+comment-code → `/link verify` ✅ (Kadokk, Astera, main); first sync tick captured
+level 204 Elite Knight; `/profile` shows it; personalized `/ask` referenced the
+real level/vocation/world unprompted (even the recent-death context). Item 5
+(second unlinked account comparison) deferred — needs a second Discord account.
+Item 6 (`/memory forget-all` round-trip) deliberately deferred until after the
+Phase 4 quest steps so one wipe verifies both phases' forget semantics.
+
 ## Phase 3 verification
 
 Phase 3 (memory distillation & continuity — the capture distiller + 5-min scheduler,
@@ -161,6 +177,17 @@ do not reorder the items above).
 6. From a free-tier account: `/ask remember that I like team hunts` → polite premium message; `memory_facts` has NO row for that user; `/goals set` → upsell reply.
 7. `/settings set setting:memory enabled:false` → `/ask` answers unpersonalized; re-enable and confirm personalization returns.
 8. `/memory forget-all` → confirm → zero rows for the user across all user-scoped tables (including `entities`/`relations`).
+
+**Phase 3 progress (2026-07-18):** items 1–5 ✅ — `/ask remember` stored a
+`user_stated` fact; bot container restarted deliberately; the next `/ask` was
+personalized WITH the remembered solo-hunt preference (exit criterion 1: memory
+survives restart). `/goals set` + list work (note: goal text is stored verbatim —
+a "level 210 vs 300" mismatch turned out to be input-side, corrected in DB).
+Distiller verified in DB: 6/6 captures `done`, typed PARA facts, distill cost
+metered (~$0.001/turn). Item 7 (memory toggle) was contaminated by a zombie-bot
+split-brain (old `tibiaedge-phase0` stack resurrected by a daemon restart — see
+deploy.md §5b) and is being re-run clean; item 6 (free-tier upsells) pending a
+brief tier flip; item 8 (forget-all) deferred to after Phase 4 quest steps.
 
 ## Phase 4 verification
 
