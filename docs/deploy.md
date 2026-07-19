@@ -105,6 +105,26 @@ bot ready"**. Then, in a server the bot has joined, exercise it end-to-end:
 /ask what is a dragon?
 ```
 
+## 5b. One token, ONE bot — kill old stacks
+
+Two bot processes sharing the same `DISCORD_TOKEN` split-brain silently: Discord
+delivers each slash command to whichever gateway session it likes, so users see a
+random mix of correct answers, "Unknown command" errors (from a process with an
+older command registry), and "Application did not respond" timeouts.
+
+This happened live on 2026-07-18: an old dress-rehearsal Compose stack
+(`tibiaedge-phase0`) still had containers with `restart: unless-stopped`, and a
+Docker daemon restart resurrected it alongside the current stack. Before any
+deploy — and after any daemon restart — confirm exactly one bot is running:
+
+```bash
+docker ps --format '{{.Names}}\t{{.Status}}' | grep bot   # expect ONE line
+docker compose -p <old-project> down                      # removes zombie containers for good
+```
+
+`docker stop` is not enough (the container survives and auto-restarts with the
+daemon); `compose -p <project> down` deletes the containers.
+
 ## 6. Updating
 
 From the repo root:
