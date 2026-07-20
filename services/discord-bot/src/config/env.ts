@@ -8,8 +8,6 @@ const envSchema = z.object({
   DISCORD_GUILD_ID: snowflakeSchema.optional(),
   DATABASE_URL: z.string().trim().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  ANTHROPIC_API_KEY: z.string().trim().min(1),
-  ANTHROPIC_MODEL: z.string().trim().default('claude-haiku-4-5'),
   OPENROUTER_API_KEY: z.string().trim().min(1),
   AI_MODEL: z.string().trim().default('qwen/qwen3.6-flash'),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
@@ -29,8 +27,6 @@ export type AppEnv = {
   discordGuildId?: string;
   databaseUrl: string;
   nodeEnv: 'development' | 'test' | 'production';
-  anthropicApiKey: string;
-  anthropicModel: string;
   openrouterApiKey: string;
   aiModel: string;
   aiMaxOutputTokens: number;
@@ -52,8 +48,6 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     discordGuildId: parsed.DISCORD_GUILD_ID,
     databaseUrl: parsed.DATABASE_URL,
     nodeEnv: parsed.NODE_ENV,
-    anthropicApiKey: parsed.ANTHROPIC_API_KEY,
-    anthropicModel: parsed.ANTHROPIC_MODEL,
     openrouterApiKey: parsed.OPENROUTER_API_KEY,
     aiModel: parsed.AI_MODEL,
     aiMaxOutputTokens: parsed.AI_MAX_OUTPUT_TOKENS,

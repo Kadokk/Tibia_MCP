@@ -38,7 +38,7 @@ export class PlayerContextService {
   }) {}
 
   /**
-   * Returns the dynamic system block, or null (= the Anthropic request stays
+   * Returns the dynamic system block, or null (= the request stays
    * byte-identical to Phase 1 — the cache-stable path for unlinked free users).
    * Premium users grow ranked facts, goals, and recent gists inside the same
    * budget; a premium user with facts but no linked character still gets a block.

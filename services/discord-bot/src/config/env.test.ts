@@ -7,7 +7,6 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
       OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp',
       NODE_ENV: 'test'
@@ -17,7 +16,6 @@ describe('parseEnv', () => {
     expect(env.discordClientId).toBe('123456789012345678');
     expect(env.databaseUrl).toContain('postgres://');
     expect(env.nodeEnv).toBe('test');
-    expect(env.anthropicApiKey).toBe('sk-ant-test');
     expect(env.mcpServerCommand).toBe('/app/bin/tibia-mcp');
   });
 
@@ -26,12 +24,10 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
       OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
     });
 
-    expect(env.anthropicModel).toBe('claude-haiku-4-5');
     expect(env.aiDailySpendCapUsd).toBe(0.7);
     expect(env.tibiaDataBaseUrl).toBe('https://api.tibiadata.com');
     expect(env.mcpServerCwd).toBeUndefined();
@@ -42,7 +38,6 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
       OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
     });
@@ -55,7 +50,6 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
       OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
     });
@@ -67,7 +61,6 @@ describe('parseEnv', () => {
     DISCORD_TOKEN: 'token',
     DISCORD_CLIENT_ID: '123456789012345678',
     DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-    ANTHROPIC_API_KEY: 'sk-ant-test',
     OPENROUTER_API_KEY: 'sk-or-test',
     MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
   };
@@ -109,6 +102,16 @@ describe('parseEnv', () => {
     expect(env.aiModel).toBe('anthropic/claude-haiku-4.5');
     expect(env.aiMaxOutputTokens).toBe(2048);
     expect(typeof env.aiMaxOutputTokens).toBe('number');
+  });
+
+  // Zod strips unknown keys, so a leftover ANTHROPIC_* value in the server .env
+  // after the OpenRouter migration is harmless — no need for ops to scrub it.
+  it('silently ignores a stale ANTHROPIC_API_KEY / ANTHROPIC_MODEL', () => {
+    const env = parseEnv({ ...inlineValidEnvObject, ANTHROPIC_API_KEY: 'sk-ant-stale', ANTHROPIC_MODEL: 'claude-haiku-4-5' });
+
+    expect(env.openrouterApiKey).toBe('sk-or-test');
+    expect(env).not.toHaveProperty('anthropicApiKey');
+    expect(env).not.toHaveProperty('anthropicModel');
   });
 
   it('rejects missing required values', () => {
