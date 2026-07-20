@@ -1,0 +1,36 @@
+name: Deploy
+
+# Deploys to the TibiaEdge VPS on every merge to main (plus a manual button).
+# The SSH key in VPS_SSH_KEY is bound on the server to a forced command that
+# can ONLY run scripts/vps/deploy.sh — no shell, no forwarding — so a leaked
+# secret cannot become server access. Host coordinates live in secrets because
+# this repo is public.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/ci_key
+          chmod 600 ~/.ssh/ci_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy (forced command runs scripts/vps/deploy.sh on the VPS)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: ssh -i ~/.ssh/ci_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST" deploy
