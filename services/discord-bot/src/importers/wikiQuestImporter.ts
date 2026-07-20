@@ -1,5 +1,6 @@
-import type Anthropic from '@anthropic-ai/sdk';
-import { costUsdMicros } from '../agent/pricing';
+import type OpenAI from 'openai';
+import { describeAiError, type ChatClient } from '../ai/client';
+import { costUsdMicros, type OpenRouterUsage } from '../ai/cost';
 import { parseInfoboxQuest, parseRequiredEquipment, questSlug } from './wikiParser';
 import type { QuestRepository } from '../repositories/questRepository';
 import type { WikiImportRunRepository } from '../repositories/wikiImportRunRepository';
@@ -10,16 +11,19 @@ export const WIKI_USER_AGENT = 'TibiaEdgeBot/2.0 (Discord quest companion; conta
 const THROTTLE_MS = 2000;
 const REVID_BATCH = 50;
 const RETRY_BACKOFFS_MS = [5000, 15000, 45000]; // 3 retries after the initial attempt
-const STEPS_TOOL: Anthropic.Tool = {
-  name: 'record_quest_steps',
-  description: 'Record the rewritten quest walkthrough steps.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      steps: { type: 'array', maxItems: 10, items: { type: 'string', maxLength: 200 },
-               description: 'Short imperative step gists IN YOUR OWN WORDS — never copy sentences from the source.' }
-    },
-    required: ['steps']
+const STEPS_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'record_quest_steps',
+    description: 'Record the rewritten quest walkthrough steps.',
+    parameters: {
+      type: 'object',
+      properties: {
+        steps: { type: 'array', maxItems: 10, items: { type: 'string', maxLength: 200 },
+                 description: 'Short imperative step gists IN YOUR OWN WORDS — never copy sentences from the source.' }
+      },
+      required: ['steps']
+    }
   }
 };
 const STEPS_SYSTEM = 'You summarize Tibia quest walkthroughs. Rewrite the METHOD text into 3-10 short step gists in your own words. Never copy phrases longer than a few words from the source; the source is CC BY-SA and our summary must be an original expression. Facts (NPC names, places, item names, level numbers) stay exact.';
@@ -54,10 +58,38 @@ function spoilerFallback(spoiler: string): string | null {
   return trimmed ? trimmed.slice(0, 6000) : null;
 }
 
+/**
+ * Reads the step gists out of the forced tool call. Never throws: rewriteSteps runs
+ * inside processPage, whose throw counts the page as failed. A call that succeeds
+ * but comes back malformed should cost the page its step gists, not its import.
+ */
+function extractSteps(response: OpenAI.Chat.Completions.ChatCompletion, title: string): string[] {
+  const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
+  if (!toolCall || toolCall.type !== 'function') {
+    console.warn(`quest import: no tool call in the response for ${title} — importing without step gists`);
+    return [];
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(toolCall.function.arguments || '{}');
+  } catch {
+    console.warn(`quest import: tool call arguments were not valid JSON for ${title} — importing without step gists`);
+    return [];
+  }
+
+  const raw = (parsed as { steps?: unknown } | null)?.steps;
+  if (!Array.isArray(raw)) {
+    console.warn(`quest import: tool call arguments carried no steps array for ${title} — importing without step gists`);
+    return [];
+  }
+  return raw.filter((s): s is string => typeof s === 'string' && s.length <= 200).slice(0, 10);
+}
+
 export class WikiQuestImporter {
   constructor(private readonly deps: {
     http: WikiHttp;
-    anthropic: Pick<Anthropic, 'messages'>;
+    ai: ChatClient;
     quests: Pick<QuestRepository, 'sourceRevisions' | 'upsertQuest' | 'countQuests'>;
     runs: Pick<WikiImportRunRepository, 'start' | 'finish'>;
     usage: Pick<UsageRepository, 'recordDistillUsage' | 'globalSpendTodayUsdMicros'>;
@@ -87,7 +119,9 @@ export class WikiQuestImporter {
           if (result.capped) partial = true;
           pagesUpdated++;
         } catch (err) {
-          console.error(`quest import: page failed: ${title}`, err);
+          // describeAiError, not the raw error: an OpenAI.APIError carries the
+          // response headers (Authorization included) into whatever logs this.
+          console.error(`quest import: page failed: ${title}: ${describeAiError(err)}`);
           pagesFailed++;
         }
       }
@@ -98,7 +132,7 @@ export class WikiQuestImporter {
       });
     } catch (err) {
       // Top-level failure must not throw — the weekly scheduler has to survive.
-      console.error('quest import: run failed', err);
+      console.error(`quest import: run failed: ${describeAiError(err)}`);
       await this.deps.runs.finish(runId, {
         status: 'failed', pagesSeen, pagesUpdated, pagesFailed, llmCostUsdMicros: llmCost,
         error: err instanceof Error ? err.message : String(err)
@@ -219,20 +253,17 @@ export class WikiQuestImporter {
 
   /** One forced-tool-use call; facts stay exact, prose is rewritten in the model's own words. */
   private async rewriteSteps(title: string, source: string): Promise<{ steps: string[]; cost: number }> {
-    const response = await this.deps.anthropic.messages.create({
+    const response = await this.deps.ai.chat.completions.create({
       model: this.deps.model,
-      max_tokens: 1024,
-      system: STEPS_SYSTEM,
+      max_tokens: 1024, // deliberately fixed: this job's output is a short step list
+      messages: [
+        { role: 'system', content: STEPS_SYSTEM },
+        { role: 'user', content: `Quest: ${title}\n\nMETHOD:\n${source.slice(0, 6000)}` }
+      ],
       tools: [STEPS_TOOL],
-      tool_choice: { type: 'tool', name: 'record_quest_steps' },
-      messages: [{ role: 'user', content: `Quest: ${title}\n\nMETHOD:\n${source.slice(0, 6000)}` }]
+      tool_choice: { type: 'function', function: { name: 'record_quest_steps' } }
     });
-    const cost = costUsdMicros(response.usage);
-    const toolUse = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-    const raw = (toolUse?.input as { steps?: unknown })?.steps;
-    const steps = Array.isArray(raw)
-      ? raw.filter((s): s is string => typeof s === 'string' && s.length <= 200).slice(0, 10)
-      : [];
-    return { steps, cost };
+    const cost = costUsdMicros(response.usage as OpenRouterUsage | undefined);
+    return { steps: extractSteps(response, title), cost };
   }
 }

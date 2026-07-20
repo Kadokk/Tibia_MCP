@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
-import Anthropic from '@anthropic-ai/sdk';
 import { registerCommands } from './commands/registerCommands';
 import { buildRegistry } from './commands/registry';
 import { parseEnv } from './config/env';
@@ -58,15 +57,12 @@ const mcp = await connectMcp(mcpCommand, mcpCwd);
 // A failed scrape is logged and swallowed, never crashing the bot.
 startRefreshScheduler(mcp, { intervalMs: 3_600_000 });
 
-// Bound production requests: the SDK default is a 10-min timeout retried twice (~30 min),
-// which would blow past Discord's 15-min editReply window. This client now serves only
-// the quest importer.
-const anthropic = new Anthropic({ apiKey: env.anthropicApiKey, timeout: 60_000, maxRetries: 2 });
-
-// OpenRouter client for the /ask agent loop; createAiClient applies the same bound. A
-// timed-out completions.create rejects and ends the loop (retries can't stack across
-// rounds, so worst case stays well inside the window); the rejection surfaces via runAsk
-// to askCommand's friendly catch.
+// One OpenRouter client for every AI path: the /ask loop, distillation, and the quest
+// importer. createAiClient bounds requests at 60s with 2 retries — the SDK default of a
+// 10-min timeout retried twice (~30 min) would blow past Discord's 15-min editReply
+// window. A timed-out completions.create rejects and ends the agent loop (retries can't
+// stack across rounds, so worst case stays well inside the window); the rejection
+// surfaces via runAsk to askCommand's friendly catch.
 const aiClient = createAiClient(env.openrouterApiKey);
 const tibiaData = createTibiaDataClient({ baseUrl: env.tibiaDataBaseUrl });
 const access = new AccessLimitsService();
@@ -94,12 +90,12 @@ const questImporter = new WikiQuestImporter({
         r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
       )
   },
-  anthropic,
+  ai: aiClient,
   quests,
   runs: importRuns,
   usage,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  model: env.anthropicModel,
+  model: env.aiModel,
   spendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000)
 });
 startQuestImportScheduler(questImporter, { tickMs: env.questImportTickMs, enabled: env.questImportEnabled });

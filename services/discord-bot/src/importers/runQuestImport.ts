@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { createAiClient } from '../ai/client';
 import { parseEnv } from '../config/env';
 import { createDbClient } from '../db/client';
 import { QuestRepository } from '../repositories/questRepository';
@@ -10,7 +10,7 @@ import { WikiQuestImporter, WIKI_USER_AGENT } from './wikiQuestImporter';
 // Boot migrates the corpus tables; this CLI assumes an already-migrated database.
 const env = parseEnv(process.env);
 const db = createDbClient(env.databaseUrl);
-const anthropic = new Anthropic({ apiKey: env.anthropicApiKey, timeout: 60_000, maxRetries: 2 });
+const aiClient = createAiClient(env.openrouterApiKey);
 
 const quests = new QuestRepository(db);
 const runs = new WikiImportRunRepository(db);
@@ -23,12 +23,12 @@ const importer = new WikiQuestImporter({
         r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
       )
   },
-  anthropic,
+  ai: aiClient,
   quests,
   runs,
   usage,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  model: env.anthropicModel,
+  model: env.aiModel,
   spendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000)
 });
 
