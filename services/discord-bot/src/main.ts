@@ -7,7 +7,8 @@ import { buildRegistry } from './commands/registry';
 import { parseEnv } from './config/env';
 import { createDbClient } from './db/client';
 import { loadMigrations, runMigrations } from './db/migrationRunner';
-import { runAsk, toAnthropicTools } from './agent/agentLoop';
+import { runAsk, toAiTools } from './agent/agentLoop';
+import { createAiClient } from './ai/client';
 import { createToolRouter, localToolDefs } from './agent/localTools';
 import { connectMcp } from './mcp/mcpClient';
 import { startRefreshScheduler } from './scheduler/refreshScheduler';
@@ -58,10 +59,15 @@ const mcp = await connectMcp(mcpCommand, mcpCwd);
 startRefreshScheduler(mcp, { intervalMs: 3_600_000 });
 
 // Bound production requests: the SDK default is a 10-min timeout retried twice (~30 min),
-// which would blow past Discord's 15-min editReply window. A timed-out messages.create
-// rejects and ends the agent loop (retries can't stack across rounds, so worst case stays
-// well inside the window); the rejection surfaces via runAsk to askCommand's friendly catch.
+// which would blow past Discord's 15-min editReply window. This client now serves only
+// the distill service and the quest importer.
 const anthropic = new Anthropic({ apiKey: env.anthropicApiKey, timeout: 60_000, maxRetries: 2 });
+
+// OpenRouter client for the /ask agent loop; createAiClient applies the same bound. A
+// timed-out completions.create rejects and ends the loop (retries can't stack across
+// rounds, so worst case stays well inside the window); the rejection surfaces via runAsk
+// to askCommand's friendly catch.
+const aiClient = createAiClient(env.openrouterApiKey);
 const tibiaData = createTibiaDataClient({ baseUrl: env.tibiaDataBaseUrl });
 const access = new AccessLimitsService();
 const usage = new UsageRepository(db);
@@ -108,10 +114,9 @@ startProfileSyncScheduler(profileSync, { tickMs: env.profileSyncTickMs });
 // is never a model-visible parameter — and satisfies runAsk's mcp.callTool dep.
 const router = createToolRouter({ mcp, memory, captures, quests, questEligibility });
 
-// ONE merged, stable tool list: MCP defs then local defs, cache marker on the last.
-// Fetched once at startup so the Anthropic prompt-cache prefix (system + tools)
-// stays byte-identical across users, tiers, and questions.
-const tools = toAnthropicTools([...(await mcp.listTools()), ...localToolDefs]);
+// ONE merged tool list: MCP defs then local defs, fetched once at startup so every
+// request advertises the same tools across users, tiers, and questions.
+const tools = toAiTools([...(await mcp.listTools()), ...localToolDefs]);
 
 const distill = new DistillService({
   anthropic, captures, memory, entities, links: linkedChars, tiers, usage,
@@ -121,7 +126,7 @@ const distill = new DistillService({
 startDistillScheduler(distill, { tickMs: env.distillTickMs });
 
 const ask = (question: string, askerName: string, userContext: string | null, userId: string, tier: Tier) =>
-  runAsk({ anthropic, mcp: router.bind(userId, tier), tools, model: env.anthropicModel, question, askerName, userContext });
+  runAsk({ ai: aiClient, mcp: router.bind(userId, tier), tools, model: env.aiModel, maxOutputTokens: env.aiMaxOutputTokens, question, askerName, userContext });
 
 const commands = buildRegistry({
   access, usage, tiers, ask, context, captures, settings,
