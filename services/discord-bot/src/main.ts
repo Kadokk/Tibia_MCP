@@ -60,7 +60,7 @@ startRefreshScheduler(mcp, { intervalMs: 3_600_000 });
 
 // Bound production requests: the SDK default is a 10-min timeout retried twice (~30 min),
 // which would blow past Discord's 15-min editReply window. This client now serves only
-// the distill service and the quest importer.
+// the quest importer.
 const anthropic = new Anthropic({ apiKey: env.anthropicApiKey, timeout: 60_000, maxRetries: 2 });
 
 // OpenRouter client for the /ask agent loop; createAiClient applies the same bound. A
@@ -119,8 +119,8 @@ const router = createToolRouter({ mcp, memory, captures, quests, questEligibilit
 const tools = toAiTools([...(await mcp.listTools()), ...localToolDefs]);
 
 const distill = new DistillService({
-  anthropic, captures, memory, entities, links: linkedChars, tiers, usage,
-  model: env.anthropicModel,
+  ai: aiClient, captures, memory, entities, links: linkedChars, tiers, usage,
+  model: env.aiModel,
   spendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000)
 });
 startDistillScheduler(distill, { tickMs: env.distillTickMs });

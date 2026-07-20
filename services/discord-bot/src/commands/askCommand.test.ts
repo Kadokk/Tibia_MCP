@@ -1,3 +1,4 @@
+import OpenAI from 'openai';
 import { describe, expect, it, vi } from 'vitest';
 import type { AskResult } from '../agent/agentLoop';
 import { AccessLimitsService } from '../services/accessLimits';
@@ -168,6 +169,25 @@ describe('executeAskCommand', () => {
       expect.objectContaining({ content: expect.stringContaining('went wrong') })
     );
     expect(deps.usage.recordAiQuestion).not.toHaveBeenCalled();
+  });
+
+  // OpenAI.APIError carries the response headers, Authorization included — the
+  // error object must never reach the logger.
+  it('logs an AI failure without leaking response headers', async () => {
+    const apiError = new OpenAI.APIError(401, { error: { message: 'no credits' } }, undefined, new Headers({ authorization: 'Bearer sk-or-v1-SUPERSECRET' }));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const interaction = fakeInteraction();
+    const deps = fakeDeps({ aiQuestionsToday: 0, tier: 'free' });
+    deps.ask.mockRejectedValueOnce(apiError);
+
+    await run(interaction, deps);
+
+    const loggedArgs = error.mock.calls.flat();
+    expect(loggedArgs.every((arg) => arg === null || typeof arg !== 'object')).toBe(true);
+    const logged = loggedArgs.map(String).join(' ');
+    expect(logged).toContain('401');
+    expect(logged).not.toContain('SUPERSECRET');
+    error.mockRestore();
   });
 
   it('truncates the answer to fit a Discord message', async () => {

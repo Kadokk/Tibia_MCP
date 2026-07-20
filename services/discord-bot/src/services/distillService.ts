@@ -1,5 +1,6 @@
-import type Anthropic from '@anthropic-ai/sdk';
-import { costUsdMicros } from '../agent/pricing';
+import type OpenAI from 'openai';
+import { describeAiError, type ChatClient } from '../ai/client';
+import { costUsdMicros, type OpenRouterUsage } from '../ai/cost';
 import { sanitizeFact } from './factSanitizer';
 import { getTierLimits } from './tiers';
 import type { CaptureRepository } from '../repositories/captureRepository';
@@ -27,43 +28,46 @@ type DistillOp = {
   entities?: Array<{ type: string; name: string; relation?: string }>;
 };
 
-const DISTILL_TOOL: Anthropic.Tool = {
-  name: 'apply_memory_ops',
-  description: 'Record the memory operations distilled from the new captures.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      ops: {
-        type: 'array',
-        maxItems: 20,
-        items: {
-          type: 'object',
-          properties: {
-            op: { type: 'string', enum: ['ADD', 'UPDATE', 'DELETE'] },
-            id: { type: 'integer', description: 'Existing fact id (required for UPDATE and DELETE)' },
-            para_type: { type: 'string', enum: ['project', 'area', 'resource', 'archive'] },
-            category: { type: 'string', description: 'Short lowercase tag, e.g. playstyle, goal, gear' },
-            fact: { type: 'string', maxLength: 300, description: 'Third-person declarative fact about the player' },
-            confidence: { type: 'number', minimum: 0, maximum: 1 },
-            entities: {
-              type: 'array',
-              maxItems: 5,
-              items: {
-                type: 'object',
-                properties: {
-                  type: { type: 'string', enum: ['character', 'quest', 'item', 'creature', 'spot', 'goal', 'guild'] },
-                  name: { type: 'string' },
-                  relation: { type: 'string', description: 'e.g. wants, hunts_at, prefers, member_of' }
-                },
-                required: ['type', 'name']
+const DISTILL_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'apply_memory_ops',
+    description: 'Record the memory operations distilled from the new captures.',
+    parameters: {
+      type: 'object',
+      properties: {
+        ops: {
+          type: 'array',
+          maxItems: 20,
+          items: {
+            type: 'object',
+            properties: {
+              op: { type: 'string', enum: ['ADD', 'UPDATE', 'DELETE'] },
+              id: { type: 'integer', description: 'Existing fact id (required for UPDATE and DELETE)' },
+              para_type: { type: 'string', enum: ['project', 'area', 'resource', 'archive'] },
+              category: { type: 'string', description: 'Short lowercase tag, e.g. playstyle, goal, gear' },
+              fact: { type: 'string', maxLength: 300, description: 'Third-person declarative fact about the player' },
+              confidence: { type: 'number', minimum: 0, maximum: 1 },
+              entities: {
+                type: 'array',
+                maxItems: 5,
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: { type: 'string', enum: ['character', 'quest', 'item', 'creature', 'spot', 'goal', 'guild'] },
+                    name: { type: 'string' },
+                    relation: { type: 'string', description: 'e.g. wants, hunts_at, prefers, member_of' }
+                  },
+                  required: ['type', 'name']
+                }
               }
-            }
-          },
-          required: ['op']
+            },
+            required: ['op']
+          }
         }
-      }
-    },
-    required: ['ops']
+      },
+      required: ['ops']
+    }
   }
 };
 
@@ -84,9 +88,38 @@ function renderDistillInput(captures: Array<{ id: number; kind: string; content:
   return `EXISTING FACTS:\n${factLines}\n\nNEW CAPTURES:\n${captureLines}`;
 }
 
+/**
+ * Reads the ops out of the forced tool call. Never throws: a call that succeeds
+ * but comes back malformed is a model quirk, not an outage, so it degrades to
+ * zero ops and lets the batch complete. Routing it to the 'failed' path instead
+ * would dead-letter the captures on a transient glitch.
+ */
+function extractOps(response: OpenAI.Chat.Completions.ChatCompletion, userId: string): DistillOp[] {
+  const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
+  if (!toolCall || toolCall.type !== 'function') {
+    console.warn(`distill: no tool call in the response for ${userId} — treating as zero ops`);
+    return [];
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(toolCall.function.arguments || '{}');
+  } catch {
+    console.warn(`distill: tool call arguments were not valid JSON for ${userId} — treating as zero ops`);
+    return [];
+  }
+
+  const ops = (parsed as { ops?: unknown } | null)?.ops;
+  if (!Array.isArray(ops)) {
+    console.warn(`distill: tool call arguments carried no ops array for ${userId} — treating as zero ops`);
+    return [];
+  }
+  return ops as DistillOp[];
+}
+
 export class DistillService {
   constructor(private readonly deps: {
-    anthropic: Pick<Anthropic, 'messages'>;
+    ai: ChatClient;
     captures: Pick<CaptureRepository, 'usersWithPendingCaptures' | 'pendingForUser' | 'setDistillStatus'>;
     memory: Pick<MemoryRepository, 'topRankedFacts' | 'countActiveFacts' | 'insertFact' | 'supersedeFact' | 'deactivateFact'>;
     entities: Pick<EntityRepository, 'upsert' | 'addRelation'>;
@@ -108,7 +141,9 @@ export class DistillService {
       try {
         await this.distillUser(userId);
       } catch (err) {
-        console.error(`distill failed for user ${userId}`, err);
+        // describeAiError, not the raw error: an OpenAI.APIError carries the
+        // response headers (Authorization included) into whatever logs this.
+        console.error(`distill failed for user ${userId}: ${describeAiError(err)}`);
       }
     }
   }
@@ -120,19 +155,19 @@ export class DistillService {
 
     try {
       const facts = await this.deps.memory.topRankedFacts(userId, FACTS_IN_CONTEXT, { includeGoals: true });
-      const response = await this.deps.anthropic.messages.create({
+      const response = await this.deps.ai.chat.completions.create({
         model: this.deps.model,
         max_tokens: DISTILL_MAX_TOKENS,
-        system: DISTILL_SYSTEM,
+        messages: [
+          { role: 'system', content: DISTILL_SYSTEM },
+          { role: 'user', content: renderDistillInput(captures, facts) }
+        ],
         tools: [DISTILL_TOOL],
-        tool_choice: { type: 'tool', name: 'apply_memory_ops' },
-        messages: [{ role: 'user', content: renderDistillInput(captures, facts) }]
+        tool_choice: { type: 'function', function: { name: 'apply_memory_ops' } }
       });
-      await this.deps.usage.recordDistillUsage(userId, costUsdMicros(response.usage));
+      await this.deps.usage.recordDistillUsage(userId, costUsdMicros(response.usage as OpenRouterUsage | undefined));
 
-      const toolUse = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-      const ops = Array.isArray((toolUse?.input as { ops?: unknown })?.ops) ? ((toolUse!.input as { ops: DistillOp[] }).ops) : [];
-      await this.applyOps(userId, ops, captureIds[0]);
+      await this.applyOps(userId, extractOps(response, userId), captureIds[0]);
       await this.deps.captures.setDistillStatus(captureIds, 'done');
     } catch (err) {
       await this.deps.captures.setDistillStatus(captureIds, 'failed');

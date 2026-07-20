@@ -1,5 +1,6 @@
 import type { ChatInputCommandInteraction } from 'discord.js';
 import type { AskResult } from '../agent/agentLoop';
+import { describeAiError } from '../ai/client';
 import type { AccessLimitsService } from '../services/accessLimits';
 import type { UsageRepository } from '../repositories/usageRepository';
 import type { UserTierRepository } from '../repositories/userTierRepository';
@@ -89,7 +90,7 @@ export async function executeAskCommand(
       .catch((err) => console.error('capture append failed', err));
     await interaction.editReply({ content: result.text.slice(0, 1990) });
   } catch (err) {
-    console.error('ask failed', err);
+    console.error(`ask failed: ${describeAiError(err)}`);
     await interaction.editReply({ content: 'Something went wrong answering that — please try again in a minute.' });
   }
   return null;

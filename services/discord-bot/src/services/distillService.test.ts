@@ -1,15 +1,30 @@
-import { describe, expect, it, vi } from 'vitest';
+import OpenAI from 'openai';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DistillService } from './distillService';
 
-const toolUseResponse = (ops: unknown[]) => ({
-  content: [{ type: 'tool_use', id: 't1', name: 'apply_memory_ops', input: { ops } }],
-  stop_reason: 'tool_use',
-  usage: { input_tokens: 800, output_tokens: 120, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+const usage = { prompt_tokens: 800, completion_tokens: 120, total_tokens: 920, cost: 0.0002 };
+
+/** The forced tool call as it arrives on the wire — `arguments` is a JSON string. */
+const toolCallResponse = (ops: unknown[]) => ({
+  choices: [
+    {
+      message: {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 't1', type: 'function', function: { name: 'apply_memory_ops', arguments: JSON.stringify({ ops }) } }]
+      },
+      finish_reason: 'tool_calls'
+    }
+  ],
+  usage
 });
+
+/** Builds an `ai` dep whose single create() call resolves to `response`. */
+const aiReturning = (response: unknown) => ({ chat: { completions: { create: vi.fn().mockResolvedValue(response) } } });
 
 function makeService(over: Record<string, unknown> = {}, ops: unknown[] = []) {
   const deps = {
-    anthropic: { messages: { create: vi.fn().mockResolvedValue(toolUseResponse(ops)) } },
+    ai: aiReturning(toolCallResponse(ops)),
     captures: {
       usersWithPendingCaptures: vi.fn().mockResolvedValue(['u1']),
       pendingForUser: vi.fn().mockResolvedValue([{ id: 1, kind: 'qa_turn', content: 'Q: best solo spot?\nA: …', created_at: '' }]),
@@ -26,7 +41,7 @@ function makeService(over: Record<string, unknown> = {}, ops: unknown[] = []) {
     links: { listForUser: vi.fn().mockResolvedValue([{ id: 1, character_name: 'Kadokk', is_main: true, verified: true }]) },
     tiers: { getTier: vi.fn().mockResolvedValue('pro') },
     usage: { recordDistillUsage: vi.fn().mockResolvedValue(undefined), globalSpendTodayUsdMicros: vi.fn().mockResolvedValue(0) },
-    model: 'claude-haiku-4-5',
+    model: 'qwen/qwen3.6-flash',
     spendCapUsdMicros: 700_000,
     ...over
   };
@@ -34,6 +49,8 @@ function makeService(over: Record<string, unknown> = {}, ops: unknown[] = []) {
 }
 
 describe('DistillService', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('applies an ADD op: sanitized fact inserted for the right user, capture marked done, cost metered', async () => {
     const { deps, svc } = makeService({}, [{ op: 'ADD', para_type: 'area', category: 'playstyle', fact: '  Prefers solo hunts ', confidence: 0.9 }]);
     await svc.distillTick();
@@ -79,7 +96,8 @@ describe('DistillService', () => {
   });
 
   it('marks the batch failed and does not throw when the model call errors', async () => {
-    const { deps, svc } = makeService({ anthropic: { messages: { create: vi.fn().mockRejectedValue(new Error('api down')) } } });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps, svc } = makeService({ ai: { chat: { completions: { create: vi.fn().mockRejectedValue(new Error('api down')) } } } });
     await expect(svc.distillTick()).resolves.not.toThrow();
     expect(deps.captures.setDistillStatus).toHaveBeenCalledWith([1], 'failed');
   });
@@ -100,5 +118,103 @@ describe('DistillService', () => {
     const { deps, svc } = makeService({ usage: { recordDistillUsage: vi.fn(), globalSpendTodayUsdMicros: vi.fn().mockResolvedValue(700_000) } });
     await svc.distillTick();
     expect(deps.captures.usersWithPendingCaptures).not.toHaveBeenCalled();
+  });
+
+  it('forces the apply_memory_ops tool and sends the prompt as system + user messages', async () => {
+    const { deps, svc } = makeService();
+    await svc.distillTick();
+
+    const request = deps.ai.chat.completions.create.mock.calls[0][0];
+    expect(request.model).toBe('qwen/qwen3.6-flash');
+    expect(request.max_tokens).toBe(2048);
+    expect(request.tool_choice).toEqual({ type: 'function', function: { name: 'apply_memory_ops' } });
+    expect(request.tools).toHaveLength(1);
+    expect(request.tools[0].type).toBe('function');
+    expect(request.tools[0].function.name).toBe('apply_memory_ops');
+    expect(request.tools[0].function.parameters.required).toEqual(['ops']);
+    expect(request.messages.map((m: { role: string }) => m.role)).toEqual(['system', 'user']);
+    expect(request.messages[1].content).toContain('NEW CAPTURES:');
+  });
+
+  it('meters cost from usage.cost', async () => {
+    const { deps, svc } = makeService();
+    await svc.distillTick();
+    expect(deps.usage.recordDistillUsage).toHaveBeenCalledWith('u1', 200); // $0.0002 -> 200 micros
+  });
+
+  // A successful call that comes back malformed is a model quirk, not an outage:
+  // marking it 'failed' would dead-letter the captures forever.
+  it('completes the batch as done when the response carries no tool call', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { deps, svc } = makeService({
+      ai: aiReturning({ choices: [{ message: { role: 'assistant', content: 'I have nothing to add' }, finish_reason: 'stop' }], usage })
+    });
+
+    await svc.distillTick();
+
+    expect(deps.captures.setDistillStatus).toHaveBeenCalledWith([1], 'done');
+    expect(deps.captures.setDistillStatus).not.toHaveBeenCalledWith([1], 'failed');
+    expect(deps.memory.insertFact).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('completes the batch as done when the tool call arguments are not valid JSON', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { deps, svc } = makeService({
+      ai: aiReturning({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 't1', type: 'function', function: { name: 'apply_memory_ops', arguments: '{"ops": [' } }]
+            },
+            finish_reason: 'tool_calls'
+          }
+        ],
+        usage
+      })
+    });
+
+    await svc.distillTick();
+
+    expect(deps.captures.setDistillStatus).toHaveBeenCalledWith([1], 'done');
+    expect(deps.captures.setDistillStatus).not.toHaveBeenCalledWith([1], 'failed');
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('still meters cost when the response is malformed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { deps, svc } = makeService({
+      ai: aiReturning({ choices: [{ message: { role: 'assistant', content: null }, finish_reason: 'stop' }], usage })
+    });
+
+    await svc.distillTick();
+
+    expect(deps.usage.recordDistillUsage).toHaveBeenCalledWith('u1', 200);
+  });
+
+  // OpenAI.APIError carries the response headers, Authorization included — the
+  // error object must never reach the logger.
+  it('logs an AI failure without leaking response headers', async () => {
+    const apiError = new OpenAI.APIError(
+      401,
+      { error: { message: 'no credits' } },
+      undefined,
+      new Headers({ authorization: 'Bearer sk-or-v1-SUPERSECRET' })
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { svc } = makeService({ ai: { chat: { completions: { create: vi.fn().mockRejectedValue(apiError) } } } });
+
+    await svc.distillTick();
+
+    const loggedArgs = error.mock.calls.flat();
+    expect(loggedArgs.length).toBeGreaterThan(0);
+    // Everything handed to the logger must be a primitive; an object could carry headers.
+    expect(loggedArgs.every((arg) => arg === null || typeof arg !== 'object')).toBe(true);
+    const logged = loggedArgs.map(String).join(' ');
+    expect(logged).toContain('401');
+    expect(logged).not.toContain('SUPERSECRET');
+    expect(logged).not.toContain('Bearer');
   });
 });
