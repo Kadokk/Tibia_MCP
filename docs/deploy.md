@@ -12,6 +12,17 @@ The Compose stack is two services:
 
 The MCP server's own SQLite scrape cache lives on the `mcp-cache` volume.
 
+> **Current deployment (since 2026-07-20):** the production stack runs on a shared
+> VPS at `/opt/tibia-mcp`, owned by the unprivileged deploy user `tibia-ai`, with a
+> fresh database (the pre-migration Mac data is archived at
+> `~/tibiaedge-backups/tibiaedge-final-2026-07-20.sql` on the owner's Mac).
+> Deploys are automated: every push to `main` runs the CI gate
+> (`.github/workflows/deploy.yml` — vitest + typecheck + C++ ctest) and then
+> triggers the server-side deploy over a forced-command SSH key (`deploy` →
+> `git reset --hard origin/main && docker compose up -d --build` → `DEPLOY-OK`).
+> The server `.env` is untracked and survives deploys. The old Mac/Docker-Desktop
+> stack is retired — never bring it back up while the VPS bot holds the token (§5b).
+
 ## 1. VPS requirements
 
 A small VPS is enough for a private beta:
@@ -75,7 +86,7 @@ committed.
 | `NODE_ENV` | optional | `development`, `test`, or `production`. Not read for runtime behavior, but set it to `production` on a deploy for accuracy. (The image already defaults to `production`; a value here overrides that, so if you copied the template, change `development` → `production`.) |
 | `ANTHROPIC_API_KEY` | yes | Anthropic API key for the `/ask` agent. |
 | `ANTHROPIC_MODEL` | optional | Model id for the agent. Defaults to `claude-haiku-4-5`. |
-| `MCP_SERVER_COMMAND` | leave as-is | Path to the `tibia-mcp` binary. The template value `/app/bin/tibia-mcp` matches the container layout — don't change it for Docker. |
+| `MCP_SERVER_COMMAND` | **leave UNSET for Docker** | Do not put this in `.env` under Docker: `env_file` overrides the image ENV, whose default `/app/bin/tibia-mcp-impersonate` carries the curl-impersonate wrapper (tibia.com TLS-fingerprint 403 fix). Setting `/app/bin/tibia-mcp` here silently bypasses the wrapper and re-breaks bazaar tools (found live 2026-07-20). |
 | `MCP_SERVER_CWD` | leave as-is | Working directory for the MCP server's SQLite cache. `/app/data` maps to the `mcp-cache` volume — don't change it for Docker. |
 | `AI_DAILY_SPEND_CAP_USD` | optional | Daily Anthropic spend circuit breaker (see §8). Defaults to `0.7`. |
 | `TIBIADATA_BASE_URL` | optional | TibiaData API base URL. Defaults to `https://api.tibiadata.com`. |

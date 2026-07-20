@@ -122,6 +122,9 @@ build's actual verification state.
 - **Step 5 — Beta rollout**: invite the bot to 2–3 friendly Discord servers, pin a short
   "how to use TibiaEdge" message, create a feedback channel. Track for one week: DAU,
   questions/day, spend/day, top failure answers.
+  **Host note (2026-07-20):** rollout runs from the VPS deployment (see deploy.md
+  "Current deployment") — the Mac/Docker-Desktop host is retired after three daemon
+  deaths in 30h. Fresh DB by owner decision (corpus auto-reimports; owner re-links).
 - **Owner re-order (2026-07-19): the tag comes BEFORE the Step 5 rollout week** — the
   tag names the exact build the beta servers receive; rollout feedback drives v0.2.x.
   Step 5 remains open work after tagging.
