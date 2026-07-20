@@ -1,10 +1,13 @@
 name: Deploy
 
-# Deploys to the TibiaEdge VPS on every merge to main (plus a manual button).
-# The SSH key in VPS_SSH_KEY is bound on the server to a forced command that
-# can ONLY run scripts/vps/deploy.sh — no shell, no forwarding — so a leaked
-# secret cannot become server access. Host coordinates live in secrets because
-# this repo is public.
+# CI gate + deploy trigger. The VPS owns all deploy logic: the SSH key
+# (secret TIBIA_MCP_VPS_DEPLOY) is locked server-side to a forced command —
+# `deploy` runs git fetch + reset to origin/main + docker compose up -d
+# --build and prints DEPLOY-OK <sha>; `ping` answers PONG; anything else
+# exits 64. The workflow never touches files, docker, or paths on the
+# server, and never writes the server .env (untracked there, survives
+# deploys). Host coordinates + pinned host key live in repo secrets
+# because this repo is public.
 
 on:
   push:
@@ -16,12 +19,47 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/discord-bot/package-lock.json
+
+      - name: Bot dependencies
+        working-directory: services/discord-bot
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: services/discord-bot
+        run: npm run typecheck --if-present
+
+      - name: TypeScript tests
+        working-directory: services/discord-bot
+        run: npx vitest run
+
+      - name: C++ build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake g++ libcurl4-openssl-dev libsqlite3-dev
+
+      - name: C++ build + tests
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+          ctest --test-dir build --output-on-failure
+
   deploy:
+    name: Deploy to VPS
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Configure SSH
         env:
-          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          SSH_KEY: ${{ secrets.TIBIA_MCP_VPS_DEPLOY }}
           KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           install -d -m 700 ~/.ssh
@@ -29,8 +67,20 @@ jobs:
           chmod 600 ~/.ssh/ci_key
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
 
-      - name: Deploy (forced command runs scripts/vps/deploy.sh on the VPS)
+      - name: Connectivity preflight
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-        run: ssh -i ~/.ssh/ci_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST" deploy
+        run: |
+          out=$(ssh -p 22 -i ~/.ssh/ci_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST" ping)
+          echo "$out"
+          grep -q "PONG" <<<"$out"
+
+      - name: Trigger server-side deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          out=$(ssh -p 22 -i ~/.ssh/ci_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST" deploy)
+          echo "$out"
+          grep -q "DEPLOY-OK" <<<"$out"
