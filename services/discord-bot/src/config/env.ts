@@ -10,6 +10,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   ANTHROPIC_API_KEY: z.string().trim().min(1),
   ANTHROPIC_MODEL: z.string().trim().default('claude-haiku-4-5'),
+  OPENROUTER_API_KEY: z.string().trim().min(1),
+  AI_MODEL: z.string().trim().default('qwen/qwen3.6-flash'),
+  AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
   MCP_SERVER_COMMAND: z.string().trim().min(1),          // path to tibia-mcp binary
   MCP_SERVER_CWD: z.string().trim().optional(),          // where its sqlite cache lives
   AI_DAILY_SPEND_CAP_USD: z.coerce.number().positive().default(0.7),
@@ -28,6 +31,9 @@ export type AppEnv = {
   nodeEnv: 'development' | 'test' | 'production';
   anthropicApiKey: string;
   anthropicModel: string;
+  openrouterApiKey: string;
+  aiModel: string;
+  aiMaxOutputTokens: number;
   mcpServerCommand: string;
   mcpServerCwd?: string;
   aiDailySpendCapUsd: number;
@@ -48,6 +54,9 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     nodeEnv: parsed.NODE_ENV,
     anthropicApiKey: parsed.ANTHROPIC_API_KEY,
     anthropicModel: parsed.ANTHROPIC_MODEL,
+    openrouterApiKey: parsed.OPENROUTER_API_KEY,
+    aiModel: parsed.AI_MODEL,
+    aiMaxOutputTokens: parsed.AI_MAX_OUTPUT_TOKENS,
     mcpServerCommand: parsed.MCP_SERVER_COMMAND,
     mcpServerCwd: parsed.MCP_SERVER_CWD,
     aiDailySpendCapUsd: parsed.AI_DAILY_SPEND_CAP_USD,
