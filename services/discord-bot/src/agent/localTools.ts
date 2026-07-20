@@ -11,8 +11,8 @@ export const PREMIUM_MEMORY_MESSAGE =
   'Long-term memory is a TibiaEdge premium feature. The player can upgrade for persistent memory and goals; linked-character personalization still works on the free tier.';
 
 // McpToolDef-shaped so main.ts can merge MCP + local defs through the one
-// existing toAnthropicTools() call — a single stable list, cache_control on the
-// last def, byte-identical for every user and tier.
+// existing toAiTools() call — a single stable list, byte-identical for every
+// user and tier.
 export const localToolDefs: McpToolDef[] = [
   {
     name: 'remember',
