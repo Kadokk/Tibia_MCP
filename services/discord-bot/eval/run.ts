@@ -1,19 +1,20 @@
 /**
  * Golden-set agent eval — LIVE model, REPLAYED tools.
  *
- * The Anthropic completion runs live (replaying it would make the assertions
+ * The model completion runs live (replaying it would make the assertions
  * vacuous); tool results are canned fixtures. Real tool *schemas* are fetched
  * once from the built MCP binary so the model sees an accurate tool surface.
  *
- * NOT part of vitest/CI. Run on demand — costs ~$0.25 at Haiku prices:
- *   ANTHROPIC_API_KEY=sk-... npm run eval
+ * NOT part of vitest/CI. Run on demand — costs ~$0.02-0.05 on Qwen:
+ *   OPENROUTER_API_KEY=sk-or-... npm run eval
  */
 import 'dotenv/config';
 import { readFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import Anthropic from '@anthropic-ai/sdk';
-import { runAsk, toAnthropicTools } from '../src/agent/agentLoop';
+import type OpenAI from 'openai';
+import { createAiClient } from '../src/ai/client';
+import { runAsk, toAiTools } from '../src/agent/agentLoop';
 import { createToolRouter, localToolDefs } from '../src/agent/localTools';
 import { PlayerContextService } from '../src/services/playerContextService';
 import { connectMcp, type McpToolResult } from '../src/mcp/mcpClient';
@@ -176,16 +177,19 @@ type CaseResult = {
 };
 
 async function main(): Promise<void> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY is not set. This eval makes live model calls (~$0.25/run). Set the key and re-run.');
+  // Explicit guard, not just a missing-key crash: the OpenAI SDK falls back to
+  // OPENAI_API_KEY from the environment, so without this a stray key would send
+  // the eval to openai.com instead of failing loudly.
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.error('OPENROUTER_API_KEY is not set. This eval makes live model calls (~$0.02-0.05/run). Set the key and re-run.');
     process.exit(1);
   }
 
   const mcpCommand = resolve(repoRoot, 'build/tibia-mcp');
-  let tools: Anthropic.Tool[];
+  let tools: OpenAI.Chat.Completions.ChatCompletionTool[];
   try {
     const realBridge = await connectMcp(mcpCommand, repoRoot);
-    tools = toAnthropicTools([...(await realBridge.listTools()), ...localToolDefs]);
+    tools = toAiTools([...(await realBridge.listTools()), ...localToolDefs]);
     // Schemas fetched — release the tibia-mcp child so it doesn't linger for the whole
     // run and keep the process alive after the report prints.
     await realBridge.close();
@@ -197,13 +201,11 @@ async function main(): Promise<void> {
 
   // Bound every request. The SDK default is a 10-minute timeout retried twice (~30 min
   // worst case) — that unbounded wait is how a stalled completion silently hung the eval.
-  const anthropic = new Anthropic({ timeout: 30_000, maxRetries: 2 });
-  const model = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5';
+  const ai = createAiClient(process.env.OPENROUTER_API_KEY, { timeout: 30_000 });
+  const model = process.env.AI_MODEL ?? 'qwen/qwen3.6-flash';
+  const maxOutputTokens = Number(process.env.AI_MAX_OUTPUT_TOKENS ?? 4096);
   const fixtureBridge = makeFixtureBridge();
   const results: CaseResult[] = [];
-  // Cache-read health across the whole run: prompt-cache hits vs all-in input.
-  let totalCacheRead = 0;
-  let totalAllInInput = 0;
 
   // Optional debug scoping: CASE_FILTER=en-auction-1,en-knowledge-1 runs just those cases.
   // Unset → all cases.
@@ -225,7 +227,7 @@ async function main(): Promise<void> {
     try {
       const result = await withCaseTimeout(
         runAsk({
-          anthropic,
+          ai,
           // `...localQuests` are the recording quest fakes (get_quest_info /
           // check_quest_eligibility). Whole-arg `as never` mirrors localTools.test.ts
           // and sidesteps the pre-existing makeLocalMemory.searchFacts fake-shape gap.
@@ -236,6 +238,7 @@ async function main(): Promise<void> {
           } as never).bind('eval-user', fixture?.tier ?? 'free'),
           tools,
           model,
+          maxOutputTokens,
           question: c.question,
           askerName: 'EvalRunner',
           userContext
@@ -266,9 +269,6 @@ async function main(): Promise<void> {
 
       // (6) mustCallTool: the model actually invoked the required local tool
       const toolPass = !c.mustCallTool || local.calls.includes(c.mustCallTool);
-
-      totalCacheRead += result.cacheReadTokens;
-      totalAllInInput += result.inputTokens;
 
       const hardFail = !langPass || !refusePass || !mncPass || !mcPass || !toolPass;
       results.push({
@@ -320,20 +320,6 @@ async function main(): Promise<void> {
   console.log('-------------------+------+--------+------+------+--------+--------+--------');
   console.log(`Total cost: $${(totalMicros / 1_000_000).toFixed(4)} over ${results.length} cases`);
   console.log(`Hard failures: ${hardFails.length}${hardFails.length ? ' (' + hardFails.map((r) => r.id).join(', ') + ')' : ''}`);
-
-  // Prompt-cache health gate: if the static prefix (system + tools) is not being
-  // reused across cases, the cache-read ratio collapses.
-  const cacheRatio = totalCacheRead / Math.max(1, totalAllInInput);
-  // Caching is live: the padded ≥4600-token prefix (system + quest tools) clears
-  // Haiku's cacheable minimum INCLUDING the ~330 tokens of API tool scaffolding
-  // that countTokens reports but cache breakpoints never cover (see
-  // prefixTokens.ts — at the old ≥4224 target, baseline no-context requests
-  // silently didn't cache at all). Default gate ≈ 70% of the first live 20-case
-  // run's observed 28.1% cache-read ratio. Recalibrate when the golden set grows
-  // to 30–50 (more single-round cases lower the natural ratio).
-  const minRatio = Number(process.env.EVAL_MIN_CACHE_RATIO ?? '0.19');
-  console.log(`Cache-read ratio: ${(cacheRatio * 100).toFixed(1)}% (threshold ${(minRatio * 100).toFixed(0)}%)`);
-  if (cacheRatio < minRatio) process.exitCode = 1;   // report still prints in full
 
   if (hardFails.length) process.exit(1);
 }

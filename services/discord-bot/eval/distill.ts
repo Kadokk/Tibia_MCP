@@ -1,11 +1,23 @@
 /**
- * Live distill smoke — ONE Haiku call over 5 canned captures (~$0.001).
+ * Live distill smoke — ONE model call over 5 canned captures (~$0.001).
  * Asserts: ≥1 sensible fact ADDed, the injection capture stored nothing
- * imperative, and cost/turn ≤ $0.002. Run: ANTHROPIC_API_KEY=... npm run eval:distill
+ * imperative, and cost/turn ≤ $0.002. Run: OPENROUTER_API_KEY=... npm run eval:distill
+ *
+ * Doubles as the live validation that forced named-function tool_choice actually
+ * works on the configured model — the cheapest signal available, worth running
+ * before committing to the full 20-case eval.
  */
 import 'dotenv/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { createAiClient } from '../src/ai/client';
 import { DistillService } from '../src/services/distillService';
+
+// Explicit guard, not just a missing-key crash: the OpenAI SDK falls back to
+// OPENAI_API_KEY from the environment, so without this a stray key would send
+// the smoke to openai.com instead of failing loudly.
+if (!process.env.OPENROUTER_API_KEY) {
+  console.error('OPENROUTER_API_KEY is not set. This smoke makes a live model call (~$0.001). Set the key and re-run.');
+  process.exit(1);
+}
 
 const captures = [
   { id: 1, kind: 'qa_turn', content: 'Q: best solo spots for a 250 EK?\nA: Try …', created_at: '' },
@@ -19,7 +31,7 @@ const stored: Array<{ fact: string }> = [];
 let costMicros = 0;
 
 const svc = new DistillService({
-  anthropic: new Anthropic({ timeout: 30_000, maxRetries: 2 }),
+  ai: createAiClient(process.env.OPENROUTER_API_KEY, { timeout: 30_000 }),
   captures: {
     usersWithPendingCaptures: async () => ['eval-user'],
     pendingForUser: async () => captures as never,
@@ -36,7 +48,7 @@ const svc = new DistillService({
   links: { listForUser: async () => [] as never },
   tiers: { getTier: async () => 'pro' as const },
   usage: { recordDistillUsage: async (_u, c) => { costMicros += c; }, globalSpendTodayUsdMicros: async () => 0 },
-  model: process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5',
+  model: process.env.AI_MODEL ?? 'qwen/qwen3.6-flash',
   spendCapUsdMicros: 700_000
 } as never);
 
