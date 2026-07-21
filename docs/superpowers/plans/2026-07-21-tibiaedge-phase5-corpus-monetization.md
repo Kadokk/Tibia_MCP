@@ -160,8 +160,8 @@ Tables per Design invariants 5–7: `catalog_items` (typed: `game_item_id, objec
 
 Core: `parseInfoboxParams(templateName, wikitext)` — brace-depth-aware param splitter (params contain nested `{{...}}`; naive `|` splitting breaks on Demon's abilities). Item mapper: filter per invariant 3; `buyfrom`/`sellto` grammar with per-NPC `Name: price` overrides → trade-offer records; `value` range parsing; numeric coercion tolerant of commas and `?`; residual params → `attributes`.
 
-- [ ] **Step 1:** Failing tests: param split on nested templates; filter accepts the item fixture and rejects the non-item; trade-offer grammar incl. override and no-override forms; value range; comma numbers.
-- [ ] **Step 2:** Implement. **Step 3:** Gates green.
+- [x] **Step 1:** Failing tests: param split on nested templates; filter accepts the item fixture and rejects the non-item; trade-offer grammar incl. override and no-override forms; value range; comma numbers.
+- [x] **Step 2:** Implement. **Step 3:** Gates green.
 
 **Exit:** both fixtures parse to expected typed records. **Commit:** `feat(importers): infobox parser + item mapper with objectclass/pickupable filter (Task 4)`
 
