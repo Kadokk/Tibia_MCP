@@ -1,0 +1,61 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 809,
+        "ns": 0,
+        "title": "Levitate",
+        "revisions": [
+          {
+            "revid": 1182811,
+            "parentid": 1182810,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Spell|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Levitate\n| spellid       = 81\n| type          = Instant\n| subclass      = Support\n| words         = exani hur up<br />exani hur down\n| implemented   = 6.4\n| premium       = no\n| mana          = 50\n| levelrequired = 12\n| cooldown      = 2\n| cooldowngroup = 2\n| voc           = [[Druid]]s, [[Sorcerer]]s, [[Paladin]]s, [[Knight]]s and [[Monk]]s.\n| effect        = Permits vertical movement via levitation, up or down one level.\n| notes         = [[File:Levitate on entrance.jpg|thumb|The red squares shows where to stand when levitating up beside entrances.]]\nThe caster cannot move up or down more than one level at a time. If this spell is cast and the character is not in the correct square to levitate, then no mana is lost.\n| history       = This spell used to be available only for players with active [[Premium Time]]. This was [[Updates/14.00.142f15|changed]] on {{OfficialNewsArchive|8076|October 08, 2024}} and it is also available to [[Free Account]] players since then.\n| libraryname        = levitate\n| librarytext        = A variation of the Magic Rope spell, Levitate allows the caster to swiftly move onto suitable obstacles without having to climb stairs or to use ramps. The practical value of this spell is far greater than may be readily apparent, as large obstacles are a daily nuisance to the exploring adventurer. Besides, the spell is quite useful to make a quick escape in case of danger, as creatures usually abandon pursuit if their enemy moves onto higher terrain. When casting this spell you should not forget to add the necessary parameter \"up\" or \"down\" to specify whether you want to move upwards or downwards.\n}}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 1923,
+        "ns": 0,
+        "title": "Ultimate Healing",
+        "revisions": [
+          {
+            "revid": 1182931,
+            "parentid": 1182930,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "<noinclude>''This article is about the '''Ultimate Healing''' [[Instant Spells|instant spell]]. For the rune, see [[Ultimate Healing Rune]].''\n</noinclude>{{Infobox Spell|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Ultimate Healing\n| spellid       = 3\n| type          = Instant\n| subclass      = Healing\n| words         = exura vita\n| premium       = no\n| mana          = 160\n| levelrequired = 30\n| cooldown      = 1\n| cooldowngroup = 1\n| voc           = [[Druid]]s and [[Sorcerer]]s\n| effect        = Restores a large amount of [[HP|health]] and cures [[paralysis]].\n| notes         = \n| history       = * Since the [[Winter Update 2007]], when [[Holy Damage|holy]] spells were introduced, Ultimate Healing became useless for [[paladin]]s, as [[Divine Healing]] restores significantly more health while costing only 50 mana more. For that reason, it was eventually made available only for mages.\n| basepower          = 250\n| libraryname        = ultimatehealing\n| librarytext        = This spell was invented by one of the very first druids, and to this day it represents one of the ultimate achievements in salutary magic. By using it a skilled spell caster can heal the worst of injuries in the blink of an eye, instantly recovering even if he was mortally wounded just seconds ago. Eager to share their knowledge and to bring good into the world, the druids gave this spell to the sorcerers, but they quickly started to bitterly regret this step, for the improved methods of self-healing only led many to be even more careless with their own lives and with those of others. Thus, while the spell saved countless lives over the centuries, it paradoxically also caused the loss of many others. Nonetheless, it is a crucial spell that should not miss in any druid's or sorcerer's spellbook.\n}}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 50392,
+        "ns": 0,
+        "title": "Annihilation",
+        "revisions": [
+          {
+            "revid": 1182607,
+            "parentid": 1182606,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Spell|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Annihilation\n| spellid       = 62\n| type          = Instant\n| subclass      = Attack\n| damagetype    = Physical\n| words         = exori gran ico\n| premium       = yes\n| mana          = 300\n| levelrequired = 110\n| voc           = [[Knight]]s\n| cooldown      = 30\n| cooldowngroup = 2\n| effect        = [[File:Physical Damage Icon.gif]] Attempts to execute the selected target with a devastating blow, dealing massive [[Physical Damage|physical damage]].\n| animation     = {{Scene|caster=Black Knight|spell=1sqmstrike|missile=Throwing Club Missile|missile_direction=south-east|missile_distance=1/1|effect_on_target=Trembling Effect|edge_size=32}}\n| implemented   = 8.70\n| notes           = A stronger variant of [[Brutal Strike]].\n| history         = the spell's [[Cooldown#Cooldown_Groups|group cooldown]] was changed from 4 seconds to 2 seconds since [[Summer Update 2024]]. \n| basepower          = 125\n| libraryname        = annihilation\n| librarytext        = This technique is a curious mixture of various fighting techniques as well as self-control and advanced magic. It was developed by a secret order of battle mages that only reluctantly made it more or less public to better its reputation in the eyes of the ever vigilant inquisition. It is unknown what led to the development of this spell but it seems to be a curious blend of seemingly contradicting traditions. It is often called the pinnacle of fighting techniques as it uses weapon and body of the combatant in such a devastating  and efficient destruction that it rivals the powerful spells of sorcerers and druids. For a moment the fighter turns into a whirlwind of steel, muscle and determination that can strike down even the most powerful foes.\n}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -14,7 +14,10 @@ import {
   parseInfoboxParams,
   parseLootTable,
   parseTradeList,
-  parseValueRange
+  parseValueRange,
+  mapNpc,
+  mapSpell,
+  stripToPlainText
 } from './catalogWikiParser';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +37,11 @@ const DOLL = wikitextOf('catalog_object_edges.api.json', 'Doll');
 const SILVER_KEY = wikitextOf('catalog_object_edges.api.json', 'Silver Key');
 const RUNE = wikitextOf('catalog_batch.api.json', 'Great Fireball Rune');
 const DEMON = wikitextOf('catalog_creature_demon.api.json');
+const ULTIMATE_HEALING = wikitextOf('catalog_spell.api.json', 'Ultimate Healing');
+const LEVITATE = wikitextOf('catalog_spell.api.json', 'Levitate');
+const ANNIHILATION = wikitextOf('catalog_spell.api.json', 'Annihilation');
+const RASHID = wikitextOf('catalog_npc_rashid.api.json', 'Rashid');
+const WAVERIDER = wikitextOf('catalog_npc_rashid.api.json', 'Captain Waverider');
 
 const paramsOf = (wikitext: string) => parseInfoboxParams('Infobox Object', wikitext);
 
@@ -411,5 +419,181 @@ describe('mapCreature', () => {
 
   it('returns null for a page with no creature infobox', () => {
     expect(mapCreature('Plate Armor', PLATE_ARMOR, 1)).toBeNull();
+  });
+});
+
+describe('stripToPlainText', () => {
+  it('removes a balanced template and its contents', () => {
+    expect(stripToPlainText('before {{Mapper Coords|126.88|128.87|7|2|text=here}} after')).toBe('before after');
+  });
+
+  // {{#switch:{{#time:...{{#expr:...}}}}|...}} — a regex that stops at the first '}'
+  // leaves a trail of braces behind, so the stripper has to count depth.
+  it('removes deeply nested parser-function templates without leaking braces', () => {
+    const raw = 'Today is {{#switch:{{#time: l |now + {{#expr:3600*{{Rashid Location/DST}}}} seconds }}|Monday=Svargrond|Sunday=Carlin}} ok';
+
+    const out = stripToPlainText(raw) ?? '';
+
+    expect(out).toBe('Today is ok');
+    expect(out).not.toMatch(/[{}]/);
+  });
+
+  it('reduces links to their display text and drops file embeds', () => {
+    expect(stripToPlainText('[[File:Rashid_Big.png|thumb|right|300px]] see [[HP|health]] and [[Carlin]]'))
+      .toBe('see health and Carlin');
+  });
+
+  it('strips html tags and bold/italic quotes', () => {
+    expect(stripToPlainText("<p>He is '''very''' rich<br />indeed</p>")).toBe('He is very rich indeed');
+  });
+
+  it('returns null for content that is empty once stripped', () => {
+    expect(stripToPlainText('{{Sound List|}}')).toBeNull();
+    expect(stripToPlainText('')).toBeNull();
+    expect(stripToPlainText(undefined)).toBeNull();
+  });
+});
+
+describe('mapSpell', () => {
+  const spell = () => mapSpell('Ultimate Healing', ULTIMATE_HEALING, 1182931);
+
+  it('maps the typed spell fields', () => {
+    expect(spell()).toMatchObject({
+      slug: 'ultimate-healing',
+      title: 'Ultimate Healing',
+      words: 'exura vita',
+      spellClass: 'Instant',
+      subclass: 'Healing',
+      mana: 160,
+      levelRequired: 30,
+      cooldown: 1,
+      premium: false,
+      sourceRevision: 1182931,
+      wikiUrl: 'https://tibia.fandom.com/wiki/Ultimate_Healing'
+    });
+  });
+
+  it('reads vocations as link targets rather than prose', () => {
+    expect(spell()?.vocations).toEqual(['Druid', 'Sorcerer']);
+  });
+
+  it('degrades the effect to plain text', () => {
+    expect(spell()?.effect).toBe('Restores a large amount of health and cures paralysis.');
+  });
+
+  // librarytext is the in-game library entry — CipSoft copy, same class as bestiarytext.
+  it('never imports the CipSoft library text', () => {
+    const record = spell();
+
+    expect(record?.attributes).not.toHaveProperty('librarytext');
+    expect(JSON.stringify(record)).not.toContain('invented by one of the very first druids');
+  });
+
+  it('drops community prose from the attributes bag', () => {
+    const attributes = spell()?.attributes ?? {};
+
+    expect(attributes).not.toHaveProperty('notes');
+    expect(attributes).not.toHaveProperty('history');
+    expect(attributes).toMatchObject({ spellid: '3' });
+  });
+
+  it('returns null for a page with no spell infobox', () => {
+    expect(mapSpell('Demon', DEMON, 1)).toBeNull();
+  });
+});
+
+describe('mapNpc', () => {
+  const rashid = () => mapNpc('Rashid', RASHID, 1097793);
+  const waverider = () => mapNpc('Captain Waverider', WAVERIDER, 1178786);
+
+  it('maps the typed NPC fields', () => {
+    expect(rashid()).toMatchObject({
+      slug: 'rashid',
+      title: 'Rashid',
+      job: 'Merchant',
+      city: 'Svargrond',
+      buysell: true,
+      sourceRevision: 1097793,
+      wikiUrl: 'https://tibia.fandom.com/wiki/Rashid'
+    });
+  });
+
+  it('keeps the city intact and degrades a linked location to plain text', () => {
+    expect(rashid()?.city).toBe('Svargrond');
+    expect(rashid()?.location).toBe('Travels around between Carlin and various Premium cities.');
+  });
+
+  // The requirement: {{Mapper Coords|...}} must not survive into stored text.
+  it('strips Mapper Coords templates out of a real location param', () => {
+    const npc = waverider();
+
+    expect(npc?.city).toBe('Liberty Bay');
+    expect(npc?.location).toContain('Liberty Bay');
+    expect(npc?.location).toContain('Treasure Island');
+    expect(npc?.location).not.toMatch(/[{}]/);
+    expect(npc?.location).not.toContain('Mapper Coords');
+    expect(npc?.location).not.toContain('text=here');
+  });
+
+  it('lets no template braces reach any stored NPC string', () => {
+    for (const npc of [rashid(), waverider()]) {
+      const stored = JSON.stringify({ city: npc?.city, location: npc?.location, job: npc?.job, attributes: npc?.attributes });
+      expect(stored).not.toContain('{{');
+      expect(stored).not.toContain('#switch');
+      expect(stored).not.toContain('Mapper Coords');
+    }
+  });
+
+  it('drops map-rendering coordinates and prose from the attributes bag', () => {
+    const attributes = rashid()?.attributes ?? {};
+
+    expect(attributes).not.toHaveProperty('predictloc');
+    expect(attributes).not.toHaveProperty('posx');
+    expect(attributes).not.toHaveProperty('geolabel');
+    expect(attributes).not.toHaveProperty('notes');
+    expect(attributes).toMatchObject({ gender: 'Male', race: 'Human' });
+  });
+
+  it('keeps the additional cities of a travelling merchant', () => {
+    expect(rashid()?.attributes).toMatchObject({ city2: 'Liberty Bay', city7: 'Carlin' });
+  });
+
+  it('returns null for a page with no NPC infobox', () => {
+    expect(mapNpc('Demon', DEMON, 1)).toBeNull();
+  });
+});
+
+describe('stored strings never carry markup', () => {
+  // Levitate has two incantations joined by <br /> in the source.
+  it('separates multi-line spell words instead of storing raw html', () => {
+    const words = mapSpell('Levitate', LEVITATE, 1182811)?.words;
+
+    expect(words).toBe('exani hur up / exani hur down');
+    expect(words).not.toContain('<');
+  });
+
+  // animation = {{Scene|caster=...}} is rendering metadata, like abilities' scene=.
+  it('keeps template markup out of the residual attributes bag', () => {
+    const record = mapSpell('Annihilation', ANNIHILATION, 1182607);
+
+    expect(record?.attributes).not.toHaveProperty('animation');
+    expect(JSON.stringify(record?.attributes)).not.toContain('{{');
+  });
+
+  it('holds the no-markup rule across every mapper', () => {
+    const records = [
+      mapItem('Plate Armor', PLATE_ARMOR, 1),
+      mapCreature('Demon', DEMON, 1),
+      mapSpell('Annihilation', ANNIHILATION, 1),
+      mapNpc('Rashid', RASHID, 1),
+      mapNpc('Captain Waverider', WAVERIDER, 1)
+    ];
+
+    for (const record of records) {
+      expect(record).not.toBeNull();
+      const stored = JSON.stringify((record as { attributes: unknown }).attributes);
+      expect(stored).not.toContain('{{');
+      expect(stored).not.toContain('}}');
+    }
   });
 });

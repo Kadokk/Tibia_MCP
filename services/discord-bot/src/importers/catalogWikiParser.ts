@@ -276,6 +276,44 @@ function findTemplateCalls(raw: string): TemplateCall[] {
 const clean = (raw: string | undefined): string | null =>
   raw === undefined || isUnknown(raw) ? null : raw.trim();
 
+/**
+ * Reduces a wiki param to storable plain text.
+ *
+ * Templates are removed by brace-depth counting, not by regex: NPC location params
+ * carry parser functions such as {{#switch:{{#time:...{{#expr:...}}}}|Monday=...}},
+ * and a non-greedy /\{\{[^}]*\}\}/ stops at the first '}' and leaves a trail of
+ * braces in the stored text. File embeds go entirely; other links degrade to their
+ * display text.
+ */
+export function stripToPlainText(raw: string | undefined): string | null {
+  if (!raw) return null;
+
+  let out = '';
+  let brace = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === '{') { brace++; continue; }
+    if (ch === '}') { if (brace > 0) brace--; continue; }
+    if (brace === 0) out += ch;
+  }
+
+  out = out
+    .replace(/\[\[(?:File|Image):[^\]]*\]\]/gi, '')          // embeds carry no prose
+    .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2')           // [[A|B]] -> B
+    .replace(/\[\[([^\]]*)\]\]/g, '$1')                      // [[A]]   -> A
+    .replace(/<[^>]*>/g, ' ')                                // <br />, <span ...>
+    .replace(/'{2,}/g, '')                                   // '''bold''' / ''italic''
+    .replace(/\[[^\]]*\]/g, '')                              // leftover external links
+    .replace(/\(\s*\)/g, '')                                 // parens emptied by stripping
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/,\s*(?=[,.])/g, '')
+    .trim()
+    .replace(/^[,;:\s]+/, '');
+
+  return out || null;
+}
+
 /** [[Page]] and [[Page|display]] -> the target, de-duplicated in document order. */
 export function extractLinkTargets(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -436,12 +474,7 @@ export function mapCreature(title: string, wikitext: string, revid: number | nul
   if (params.size === 0) return null;
 
   const get = (k: string): string | undefined => params.get(k);
-  const attributes: Record<string, string> = {};
-  for (const [k, v] of params) {
-    if (CREATURE_TYPED.has(k) || CREATURE_EXCLUDE.has(k)) continue;
-    if (!v || isUnknown(v) || v.length > 200) continue;
-    attributes[k] = v;
-  }
+  const attributes = residualAttributes(params, CREATURE_TYPED, CREATURE_EXCLUDE);
 
   return {
     slug: slugify(title),
@@ -482,12 +515,7 @@ export function mapItem(title: string, wikitext: string, revid: number | null): 
   };
 
   const value = parseValueRange(get('value'));
-  const attributes: Record<string, string> = {};
-  for (const [k, v] of params) {
-    if (TYPED_PARAMS.has(k) || ATTRIBUTE_EXCLUDE.has(k)) continue;
-    if (!v || isUnknown(v) || v.length > 200) continue; // residual bag stays small
-    attributes[k] = v;
-  }
+  const attributes = residualAttributes(params, TYPED_PARAMS, ATTRIBUTE_EXCLUDE);
 
   return {
     slug: slugify(title),
@@ -518,5 +546,134 @@ export function mapItem(title: string, wikitext: string, revid: number | null): 
       ...parseTradeList(get('buyfrom'), 'npc_sells'),
       ...parseTradeList(get('sellto'), 'npc_buys')
     ]
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Spells
+// ---------------------------------------------------------------------------
+
+export type CatalogSpellRecord = {
+  slug: string;
+  title: string;
+  words: string | null;
+  spellClass: string | null;
+  subclass: string | null;
+  vocations: string[];
+  levelRequired: number | null;
+  mana: number | null;
+  premium: boolean | null;
+  cooldown: number | null;
+  effect: string | null;
+  attributes: Record<string, string>;
+  wikiUrl: string;
+  sourceRevision: number | null;
+};
+
+const SPELL_TYPED = new Set([
+  'words', 'spellclass', 'type', 'subclass', 'voc', 'levelrequired', 'mana',
+  'premium', 'cooldown', 'effect'
+]);
+
+/** librarytext is the in-game library entry — CipSoft copy, like bestiarytext. */
+const SPELL_EXCLUDE = new Set(['librarytext', 'notes', 'history', 'sounds', 'list', 'getvalue', 'name']);
+
+/**
+ * Residual params small enough to be worth keeping, minus prose and typed fields.
+ *
+ * Values still holding template markup are dropped rather than stripped: a param
+ * like `animation = {{Scene|caster=...}}` is rendering metadata, so what survives
+ * stripping would be noise anyway. This is the single guarantee that no '{{' ever
+ * reaches the database through the residual bag.
+ */
+function residualAttributes(
+  params: Map<string, string>,
+  typed: Set<string>,
+  exclude: Set<string>,
+  skip?: (key: string) => boolean
+): Record<string, string> {
+  const attributes: Record<string, string> = {};
+  for (const [k, v] of params) {
+    if (typed.has(k) || exclude.has(k) || skip?.(k)) continue;
+    if (!v || isUnknown(v) || v.length > 200) continue;
+    if (v.includes('{{') || v.includes('}}')) continue;
+    attributes[k] = v;
+  }
+  return attributes;
+}
+
+/** Maps a Spell page to a typed record, or null if it carries no spell infobox. */
+export function mapSpell(title: string, wikitext: string, revid: number | null): CatalogSpellRecord | null {
+  const params = parseInfoboxParams('Infobox Spell', wikitext);
+  if (params.size === 0) return null;
+  const get = (k: string): string | undefined => params.get(k);
+
+  return {
+    slug: slugify(title),
+    title,
+    // Some spells list alternative incantations joined by <br />.
+    words: stripToPlainText(get('words')?.replace(/<br\s*\/?>/gi, ' / ')),
+    // Pages spell this either way; `type` is the common one.
+    spellClass: clean(get('spellclass')) ?? clean(get('type')),
+    subclass: clean(get('subclass')),
+    vocations: extractLinkTargets(get('voc')),
+    levelRequired: coerceInt(get('levelrequired')),
+    mana: coerceInt(get('mana')),
+    premium: coerceBool(get('premium')),
+    cooldown: coerceDecimal(get('cooldown')),
+    effect: stripToPlainText(get('effect')),
+    attributes: residualAttributes(params, SPELL_TYPED, SPELL_EXCLUDE),
+    wikiUrl: wikiUrlFor(title),
+    sourceRevision: revid
+  };
+}
+
+// ---------------------------------------------------------------------------
+// NPCs
+// ---------------------------------------------------------------------------
+
+export type CatalogNpcRecord = {
+  slug: string;
+  title: string;
+  job: string | null;
+  city: string | null;
+  location: string | null;
+  buysell: boolean | null;
+  attributes: Record<string, string>;
+  wikiUrl: string;
+  sourceRevision: number | null;
+};
+
+const NPC_TYPED = new Set(['job', 'city', 'location', 'buysell']);
+
+/** predictloc is a live-rendered map widget, not information about the NPC. */
+const NPC_EXCLUDE = new Set(['predictloc', 'notes', 'history', 'sounds', 'list', 'getvalue', 'name']);
+
+/** posx2 / geolabel3 / ... — map-rendering coordinates, no grounding value. */
+const isMapRenderingParam = (key: string): boolean => /^(posx|posy|posz|geolabel)\d*$/.test(key);
+
+/**
+ * Maps an NPC page to a typed record, or null if it carries no NPC infobox.
+ *
+ * `city` stays verbatim — it is the field the catalog tools filter on. `location`
+ * is free prose that may embed {{Mapper Coords|...}} widgets, so it is degraded to
+ * plain text rather than dropped, keeping the place names while guaranteeing no
+ * template markup reaches the database.
+ */
+export function mapNpc(title: string, wikitext: string, revid: number | null): CatalogNpcRecord | null {
+  const params = parseInfoboxParams('Infobox NPC', wikitext);
+  if (params.size === 0) return null;
+  const get = (k: string): string | undefined => params.get(k);
+
+  return {
+    slug: slugify(title),
+    title,
+    job: clean(get('job')),
+    city: clean(get('city')),
+    location: stripToPlainText(get('location'))?.slice(0, 500) ?? null,
+    buysell: coerceBool(get('buysell')),
+    attributes: residualAttributes(params, NPC_TYPED, NPC_EXCLUDE, isMapRenderingParam),
+    wikiUrl: wikiUrlFor(title),
+    sourceRevision: revid
   };
 }
