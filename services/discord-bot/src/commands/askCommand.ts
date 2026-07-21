@@ -7,6 +7,7 @@ import type { UserTierRepository } from '../repositories/userTierRepository';
 import type { PlayerContextService } from '../services/playerContextService';
 import type { CaptureRepository } from '../repositories/captureRepository';
 import type { Tier } from '../services/tiers';
+import { UPGRADE_CTA } from '../services/tiers';
 
 export type RateLimiter = { check(userId: string, now?: number): boolean };
 
@@ -66,7 +67,7 @@ export async function executeAskCommand(
 
   const spend = await input.usage.globalSpendTodayUsdMicros();
   if (spend >= input.dailySpendCapUsdMicros && tier === 'free') {
-    await interaction.reply({ content: 'Today\'s free AI capacity is used up — try again tomorrow, or upgrade to premium.', ephemeral: true });
+    await interaction.reply({ content: `Today's free AI capacity is used up — try again tomorrow, or upgrade to premium.\n${UPGRADE_CTA}`, ephemeral: true });
     return null;
   }
 

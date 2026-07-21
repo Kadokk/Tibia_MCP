@@ -265,7 +265,8 @@
       "userFixture": "ek250-antica",
       "expectRefusal": false,
       "mustContain": [
-        "premium"
+        "premium",
+        "/upgrade"
       ],
       "mustNotContain": [],
       "langMarkers": [
@@ -490,6 +491,24 @@
         "rashid",
         "magic",
         "plate"
+      ]
+    },
+    {
+      "id": "en-gating-2",
+      "lang": "en",
+      "question": "What do you remember about my hunting preferences?",
+      "userFixture": "ek250-antica",
+      "expectRefusal": false,
+      "mustContain": [
+        "/upgrade"
+      ],
+      "mustNotContain": [],
+      "langMarkers": [
+        "premium",
+        "memory",
+        "upgrade",
+        "feature",
+        "free"
       ]
     }
   ]

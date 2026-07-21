@@ -204,7 +204,8 @@ const commands = buildRegistry({
   access, usage, tiers, ask, context, captures, settings,
   dailySpendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000),
   mcp, tibiaData, linkService, memory, links: linkedChars, snapshots,
-  quests, questEligibility, questSeed
+  quests, questEligibility, questSeed,
+  paymentLinkUrl: env.stripePaymentLinkUrl
 });
 
 await registerCommands({ token: env.discordToken, clientId: env.discordClientId, guildId: env.discordGuildId });

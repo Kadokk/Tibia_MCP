@@ -5,6 +5,7 @@ import { createRateLimiter, executeAskCommand, type AskCommandDeps } from './ask
 import { executeCharCommand } from './charCommand';
 import { executeBoostedCommand } from './boostedCommand';
 import { executePriceCommand } from './priceCommand';
+import { executeUpgradeCommand } from './upgradeCommand';
 import { executeAuctionCommand } from './auctionCommand';
 import { executeLinkCommand } from './linkCommand';
 import { executeMemoryCommand } from './memoryCommand';
@@ -50,6 +51,9 @@ const commandData: CommandData[] = [
   new SlashCommandBuilder()
     .setName('usage')
     .setDescription('Show your TibiaEdge tier and limits.'),
+  new SlashCommandBuilder()
+    .setName('upgrade')
+    .setDescription('See what TibiaEdge premium adds, and how to get it.'),
   new SlashCommandBuilder()
     .setName('ask')
     .setDescription('Ask anything about Tibia')
@@ -161,6 +165,8 @@ export type RegistryDeps = AskCommandDeps & {
   quests: Pick<QuestRepository, 'findByNameLoose' | 'upsertProgress' | 'countTracked' | 'listProgressForUser' | 'searchByNamePrefix'>;
   questEligibility: Pick<QuestEligibilityService, 'next'>;
   questSeed: Pick<QuestSeedService, 'seedFromAuction'>;
+  /** Env-injected Stripe Payment Link; absent until payments are configured. */
+  paymentLinkUrl?: string;
 };
 
 // Real registry with dependency-injected executes. ask/char/boosted/price/auction
@@ -180,6 +186,15 @@ export function buildRegistry(deps: RegistryDeps): BotCommand[] {
         };
       case 'boosted':
         return { data, execute: () => executeBoostedCommand({ tibiaData: deps.tibiaData }) };
+      case 'upgrade':
+        return {
+          data,
+          execute: async (ctx: CommandContext) => executeUpgradeCommand({
+            discordUserId: ctx.interaction.user.id,
+            tier: await deps.tiers.getTier(ctx.interaction.user.id),
+            paymentLinkUrl: deps.paymentLinkUrl
+          })
+        };
       case 'price':
         return {
           data,

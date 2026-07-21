@@ -35,6 +35,9 @@ const envSchema = z.object({
   // see the ops handoff note in main.ts.
   PAYMENTS_ENABLED: z.string().default('false').transform((v) => v === 'true'),
   STRIPE_SECRET_KEY: z.string().trim().min(1).optional(),
+  // The Payment Link /upgrade sends players to. Never hardcoded: the repo is public
+  // and the link is account-specific.
+  STRIPE_PAYMENT_LINK_URL: z.string().trim().url().optional(),
   TIER_SYNC_TICK_MS: z.coerce.number().int().positive().default(60_000),
   STRIPE_SESSION_LOOKBACK_MS: z.coerce.number().int().positive().default(86_400_000)
 });
@@ -60,6 +63,7 @@ export type AppEnv = {
   catalogImportEnabled: boolean;
   paymentsEnabled: boolean;
   stripeSecretKey?: string;
+  stripePaymentLinkUrl?: string;
   tierSyncTickMs: number;
   stripeSessionLookbackMs: number;
 };
@@ -87,6 +91,7 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     catalogImportEnabled: parsed.CATALOG_IMPORT_ENABLED,
     paymentsEnabled: parsed.PAYMENTS_ENABLED,
     stripeSecretKey: parsed.STRIPE_SECRET_KEY,
+    stripePaymentLinkUrl: parsed.STRIPE_PAYMENT_LINK_URL,
     tierSyncTickMs: parsed.TIER_SYNC_TICK_MS,
     stripeSessionLookbackMs: parsed.STRIPE_SESSION_LOOKBACK_MS
   };

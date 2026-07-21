@@ -8,11 +8,11 @@ import type {
   CatalogNpcTradeRow, CatalogRepository, CatalogSpellRow, CatalogTradeOfferRow
 } from '../repositories/catalogRepository';
 import type { Tier } from '../services/tiers';
-import { getTierLimits } from '../services/tiers';
+import { getTierLimits, UPGRADE_CTA } from '../services/tiers';
 import { sanitizeFact } from '../services/factSanitizer';
 
 export const PREMIUM_MEMORY_MESSAGE =
-  'Long-term memory is a TibiaEdge premium feature. The player can upgrade for persistent memory and goals; linked-character personalization still works on the free tier.';
+  `Long-term memory is a TibiaEdge premium feature. The player can upgrade for persistent memory and goals; linked-character personalization still works on the free tier. ${UPGRADE_CTA}`;
 
 // McpToolDef-shaped so main.ts can merge MCP + local defs through the one
 // existing toAiTools() call — a single stable list, byte-identical for every
