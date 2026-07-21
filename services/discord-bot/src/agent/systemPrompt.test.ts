@@ -132,3 +132,28 @@ describe('SYSTEM_PROMPT — rule 9 browse-then-refine', () => {
     expect(rule9()).toMatch(/never ask|rather than asking|then offer/i);
   });
 });
+
+describe('SYSTEM_PROMPT — domain notes must not block an answer', () => {
+  /**
+   * The find_items case survived three fixes to rule 9 and the tool description
+   * because the instruction it was obeying lived elsewhere: the domain notes said
+   * to ALWAYS tailor gear advice to vocation and level. With no linked character
+   * there is no vocation or level, so the only way to comply was to ask for them —
+   * deterministic instruction-following, which is why the answer barely varied.
+   *
+   * The corroborating case: en-catalog-hunt-1 asks the same shape of question but
+   * carries a character fixture, so the facts exist and it answers.
+   */
+  it('does not demand tailoring to facts the model may not have', () => {
+    expect(SYSTEM_PROMPT).not.toContain('always tailor');
+  });
+
+  it('says to look things up and answer when vocation or level is unknown', () => {
+    expect(SYSTEM_PROMPT).toMatch(/when you know them|whenever you know|if you know/i);
+    expect(SYSTEM_PROMPT).toMatch(/show .*first|answer first|never withhold/i);
+  });
+
+  it('keeps the tailoring guidance for when those facts are known', () => {
+    expect(SYSTEM_PROMPT).toMatch(/tailor .*advice to vocation and level/i);
+  });
+});

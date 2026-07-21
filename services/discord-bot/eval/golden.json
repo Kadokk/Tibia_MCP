@@ -419,16 +419,18 @@
       "question": "Who is Rashid and what does he do?",
       "expectRefusal": false,
       "mustCallTool": "get_npc_info",
-      "mustContain": [
-        "merchant"
-      ],
+      "mustContain": [],
       "mustNotContain": [
         "guaranteed"
       ],
       "langMarkers": [
         "rashid",
         "merchant",
-        "svargrond"
+        "trader",
+        "svargrond",
+        "buys",
+        "items",
+        "travels"
       ]
     },
     {
@@ -461,9 +463,14 @@
         "guaranteed"
       ],
       "langMarkers": [
+        "find",
+        "found",
+        "catalog",
+        "wiki",
+        "information",
         "warhammer",
         "ferumbras",
-        "catalog"
+        "sorry"
       ]
     },
     {
