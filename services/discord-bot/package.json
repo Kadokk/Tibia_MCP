@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx src/main.ts",
     "test": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "lint": "eslint src",
     "build": "tsc -p tsconfig.json",
     "eval": "tsx eval/run.ts",

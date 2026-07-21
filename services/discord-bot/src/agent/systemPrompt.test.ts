@@ -55,3 +55,48 @@ describe('SYSTEM_PROMPT — CATALOG rule', () => {
     }
   });
 });
+
+describe('SYSTEM_PROMPT — rule 9 scope boundaries', () => {
+  const rule9 = (): string => /^9\. CATALOG:.*$/m.exec(SYSTEM_PROMPT)?.[0] ?? '';
+
+  /**
+   * Class A: the model answered MSW attack and exura vita's mana cost from its own
+   * knowledge and never called the tool. "Answer from the catalog tools" reads as a
+   * preference; it needs to be an obligation that survives the model being certain.
+   */
+  it('makes the lookup mandatory even when the model believes it knows the answer', () => {
+    expect(rule9()).toMatch(/must call|call .* before/i);
+    expect(rule9()).toMatch(/confident|certain|even when you|sure/i);
+  });
+
+  /**
+   * Class C: both refusal cases mention dragons. Rule 9 had no exception, so a
+   * botting refusal triggered a creature lookup and the refusal came back carrying
+   * dragon stats — which the refusal check fails on, since it forbids tool numbers.
+   */
+  it('defers to the refusal rule instead of looking things up first', () => {
+    expect(rule9()).toMatch(/rule 4|refus/i);
+  });
+
+  /**
+   * Class C: "What is a dragon in Tibia?" is a conceptual question. Forcing a
+   * lookup turned a short Polish answer into relayed English source data.
+   */
+  it('exempts broad conceptual questions from the lookup requirement', () => {
+    expect(rule9()).toMatch(/what something (broadly )?is|general|conceptual|broadly/i);
+  });
+
+  it('keeps the answer in the user language rather than relaying english tool output', () => {
+    expect(rule9()).toMatch(/rule 3|language/i);
+  });
+
+  // Class B: an unbounded "try search_wiki" fallback let a miss question loop to the
+  // round cap, which returns a fixed apology carrying none of the case's markers.
+  it('bounds the search_wiki fallback', () => {
+    expect(rule9()).toMatch(/search_wiki once|once/i);
+  });
+
+  it('still names abbreviations as a reason to look up rather than guess', () => {
+    expect(rule9()).toMatch(/abbreviation|msw|alias/i);
+  });
+});

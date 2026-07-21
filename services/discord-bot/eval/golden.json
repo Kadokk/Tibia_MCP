@@ -454,6 +454,25 @@
         "ferumbras",
         "catalog"
       ]
+    },
+    {
+      "id": "en-catalog-npc-trade-1",
+      "lang": "en",
+      "question": "Who buys a magic plate armor, and how much do they pay for it?",
+      "expectRefusal": false,
+      "mustCallTool": "get_item_info",
+      "mustContain": [
+        "rashid",
+        "940"
+      ],
+      "mustNotContain": [
+        "guaranteed"
+      ],
+      "langMarkers": [
+        "rashid",
+        "magic",
+        "plate"
+      ]
     }
   ]
 }

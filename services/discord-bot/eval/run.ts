@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
 import type OpenAI from 'openai';
 import { createAiClient } from '../src/ai/client';
 import { runAsk, toAiTools } from '../src/agent/agentLoop';
-import { buildLoopToolDefs, createToolRouter } from '../src/agent/localTools';
+import { buildLoopToolDefs, createToolRouter, type LocalToolDeps } from '../src/agent/localTools';
 import { PlayerContextService } from '../src/services/playerContextService';
 import { connectMcp, type McpToolResult } from '../src/mcp/mcpClient';
 
@@ -35,7 +35,17 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
 
 const golden = JSON.parse(readFileSync(resolve(here, 'golden.json'), 'utf8')) as { cases: GoldenCase[] };
-const fixtures = JSON.parse(readFileSync(resolve(here, 'toolFixtures.json'), 'utf8')) as Record<string, string>;
+const fixtureFile = JSON.parse(readFileSync(resolve(here, 'toolFixtures.json'), 'utf8')) as Record<string, unknown>;
+const fixtures = Object.fromEntries(
+  Object.entries(fixtureFile).filter(([, v]) => typeof v === 'string')
+) as Record<string, string>;
+/**
+ * Which subjects each canned response is actually about. The fixtures are keyed by
+ * TOOL name, so without this a search_wiki call about anything at all came back
+ * with the Dragon article — confidently wrong data that a miss case cannot
+ * reconcile, which is how a "not in the catalog" question burned eight rounds.
+ */
+const fixtureSubjects = (fixtureFile._subjects ?? {}) as Record<string, string[]>;
 const userFixtures = JSON.parse(readFileSync(resolve(here, 'userFixtures.json'), 'utf8')) as Record<string, UserFixture>;
 
 // --- assertion helpers ---------------------------------------------------
@@ -80,9 +90,15 @@ function withCaseTimeout<T>(work: Promise<T>, ms: number, id: string): Promise<T
 
 function makeFixtureBridge() {
   const used: string[] = [];
+  const called: string[] = [];
   return {
     reset() {
       used.length = 0;
+      called.length = 0;
+    },
+    /** MCP tools this case actually invoked — diagnostic output for failures. */
+    calledNames(): string[] {
+      return [...called];
     },
     // Seed grounding with non-tool context (e.g. the player-card fixture) so its
     // numbers (level "250", etc.) don't get flagged as ungrounded in the answer.
@@ -93,8 +109,17 @@ function makeFixtureBridge() {
       return used.join('\n');
     },
     bridge: {
-      async callTool(name: string, _args: Record<string, unknown>): Promise<McpToolResult> {
-        const text = fixtures[name] ?? fixtures['_default'] ?? 'No matching data was found for that query.';
+      async callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
+        called.push(name);
+        const subjects = fixtureSubjects[name] ?? [];
+        const query = Object.values(args ?? {})
+          .filter((v): v is string => typeof v === 'string')
+          .join(' ')
+          .toLowerCase();
+        // A canned answer only stands in for its own subject; anything else is a miss.
+        const onSubject = subjects.length === 0 || subjects.some((k) => query.includes(k));
+        const canned = onSubject ? fixtures[name] : undefined;
+        const text = canned ?? fixtures['_default'] ?? 'No matching data was found for that query.';
         used.push(text);
         return { text, isError: false };
       }
@@ -225,7 +250,7 @@ const EVAL_HUNT = {
  * A name that does not match the canned row returns null / [], which is what makes
  * the CATALOG rule's honest-miss behaviour observable in an eval case.
  */
-function makeLocalCatalog(calls: string[]) {
+function makeLocalCatalog(calls: string[]): { catalog: LocalToolDeps['catalog'] } {
   const matches = (needle: string, ...aliases: string[]) =>
     aliases.some((a) => needle.toLowerCase().includes(a));
   return {
@@ -255,6 +280,30 @@ function makeLocalCatalog(calls: string[]) {
       findHuntingPlaces: async (f: { level: number }) => {
         calls.push('find_hunting_places');
         return f.level >= 20 ? [EVAL_HUNT] : [];
+      },
+      // Only the Magic Plate Armor row (id 1) is traded. Rashid's name appears
+      // nowhere else, so a case asserting it proves the offers table was read
+      // rather than the item row's own price columns.
+      findTradeOffersForItem: async (itemId: number) => {
+        calls.push('get_item_info:offers');
+        return itemId === EVAL_ITEM.id
+          ? [
+              { npc_name: 'Rashid', direction: 'npc_buys' as const, price: 940 },
+              { npc_name: 'Djinn', direction: 'npc_buys' as const, price: null },
+              { npc_name: 'Esrik', direction: 'npc_sells' as const, price: null }
+            ]
+          : [];
+      },
+      findTradeOffersForNpc: async (npcName: string) => {
+        calls.push('get_npc_info:offers');
+        return matches(npcName, 'rashid')
+          ? [{
+              npc_name: 'Rashid', direction: 'npc_buys' as const, price: 940,
+              item_title: EVAL_ITEM.title,
+              item_npc_buy_price: EVAL_ITEM.npc_buy_price,
+              item_npc_sell_price: EVAL_ITEM.npc_sell_price
+            }]
+          : [];
       }
     }
   };
@@ -270,6 +319,10 @@ type CaseResult = {
   mcPass: boolean;
   toolPass: boolean;
   groundingViolations: string[];
+  /** Diagnostics: without these a failure says WHAT broke but never WHY. */
+  toolCalls: string[];
+  rounds: number;
+  answerHead: string;
   tokens: number;
   costUsdMicros: number;
   hardFail: boolean;
@@ -383,6 +436,9 @@ async function main(): Promise<void> {
         mcPass,
         toolPass,
         groundingViolations,
+        toolCalls: [...local.calls, ...fixtureBridge.calledNames()],
+        rounds: result.rounds,
+        answerHead: answer.replace(/\s+/g, ' ').slice(0, 220),
         tokens: result.inputTokens + result.outputTokens,
         costUsdMicros: result.costUsdMicros,
         hardFail
@@ -397,6 +453,9 @@ async function main(): Promise<void> {
         mcPass: false,
         toolPass: false,
         groundingViolations: [],
+        toolCalls: [...local.calls, ...fixtureBridge.calledNames()],
+        rounds: 0,
+        answerHead: '',
         tokens: 0,
         costUsdMicros: 0,
         hardFail: true,
@@ -407,16 +466,21 @@ async function main(): Promise<void> {
 
   // --- report ---
   const yn = (b: boolean): string => (b ? 'PASS' : 'FAIL');
-  console.log('\nid                 | lang | refuse | mnc  | mc   | ground | tokens | cost($)');
-  console.log('-------------------+------+--------+------+------+--------+--------+--------');
+  console.log('\nid                 | lang | refuse | mnc  | mc   | tool | ground | rnd | tokens | cost($)');
+  console.log('-------------------+------+--------+------+------+------+--------+-----+--------+--------');
   for (const r of results) {
     const ground = r.groundingViolations.length === 0 ? ' ok ' : `warn`;
     console.log(
-      `${r.id.padEnd(18)} | ${yn(r.langPass)} | ${yn(r.refusePass).padEnd(6)} | ${yn(r.mncPass).padEnd(4)} | ${yn(r.mcPass).padEnd(4)} | ${ground.padEnd(6)} | ${String(r.tokens).padStart(6)} | ${(r.costUsdMicros / 1_000_000).toFixed(4)}`
+      `${r.id.padEnd(18)} | ${yn(r.langPass)} | ${yn(r.refusePass).padEnd(6)} | ${yn(r.mncPass).padEnd(4)} | ${yn(r.mcPass).padEnd(4)} | ${yn(r.toolPass).padEnd(4)} | ${ground.padEnd(6)} | ${String(r.rounds).padStart(3)} | ${String(r.tokens).padStart(6)} | ${(r.costUsdMicros / 1_000_000).toFixed(4)}`
     );
     if (r.error) console.log(`   ! error: ${r.error}`);
     if (r.groundingViolations.length) console.log(`   ! ungrounded numbers: ${r.groundingViolations.join(', ')}`);
-    if (!r.toolPass && !r.error) console.log(`   ! required memory tool was not called`);
+    // On any hard failure, show what the model actually did. A pass/fail grid alone
+    // cannot distinguish "called the wrong tool" from "called nothing".
+    if (r.hardFail) {
+      console.log(`   ! tools called: ${r.toolCalls.length ? r.toolCalls.join(' -> ') : '(none)'}`);
+      if (r.answerHead) console.log(`   ! answer: ${r.answerHead}`);
+    }
   }
 
   const totalMicros = results.reduce((sum, r) => sum + r.costUsdMicros, 0);

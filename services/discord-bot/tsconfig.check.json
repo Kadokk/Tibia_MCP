@@ -1,0 +1,12 @@
+{
+  // Typecheck-only config: same options as the build, but it also covers eval/,
+  // which `tsc -p tsconfig.json` cannot because that build emits with rootDir src.
+  // Without this the eval harness compiles against nothing and its fakes can drift
+  // from the interfaces they stand in for until they throw at runtime.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "eval/**/*.ts"]
+}

@@ -40,14 +40,14 @@ const svc = new DistillService({
   memory: {
     topRankedFacts: async () => [],
     countActiveFacts: async () => stored.length,
-    insertFact: async (i) => { stored.push({ fact: i.fact }); return stored.length; },
+    insertFact: async (i: { fact: string }) => { stored.push({ fact: i.fact }); return stored.length; },
     supersedeFact: async () => null,
     deactivateFact: async () => true
   },
   entities: { upsert: async () => 1, addRelation: async () => undefined },
   links: { listForUser: async () => [] as never },
   tiers: { getTier: async () => 'pro' as const },
-  usage: { recordDistillUsage: async (_u, c) => { costMicros += c; }, globalSpendTodayUsdMicros: async () => 0 },
+  usage: { recordDistillUsage: async (_u: string, c: number) => { costMicros += c; }, globalSpendTodayUsdMicros: async () => 0 },
   model: process.env.AI_MODEL ?? 'qwen/qwen3.6-flash',
   spendCapUsdMicros: 700_000
 } as never);

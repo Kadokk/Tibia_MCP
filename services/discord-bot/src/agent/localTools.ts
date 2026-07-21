@@ -57,13 +57,13 @@ export const localToolDefs: McpToolDef[] = [
   {
     name: 'get_item_info',
     description:
-      'Look up one Tibia item in the wiki catalog: attack/defence/armour, weight, level and vocation requirements, NPC buy and sell prices, and market value. Understands common abbreviations such as MSW, SD, GFB.',
+      'Look up one Tibia item in the wiki catalog: attack/defence/armour, weight, level and vocation requirements, which NPCs buy and sell it and for how much, and market value. Understands common abbreviations such as MSW, SD, GFB. Call this before quoting any item stat or price, including for items you believe you already know.',
     inputSchema: { type: 'object', properties: { item: { type: 'string', description: 'Item name or abbreviation, e.g. "magic sword" or "msw"' } }, required: ['item'] }
   },
   {
     name: 'find_items',
     description:
-      'List catalog items matching a name fragment, object class, equipment slot, or maximum level requirement. Use for "what armour can I wear at level 40" style questions; use get_item_info when the player named one item.',
+      'List catalog items matching a name fragment, object class, equipment slot, or maximum level requirement. Use whenever the player is browsing or comparing rather than asking about one named item — "what armour can I wear at level 40", "what should I buy next". Use get_item_info instead only when they named a specific item.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -79,25 +79,25 @@ export const localToolDefs: McpToolDef[] = [
   {
     name: 'get_creature_info',
     description:
-      'Look up one Tibia creature: hitpoints, experience, armour, elemental resistances, abilities, loot table and where it lives. Prefer this over search_creature.',
+      'Look up one Tibia creature: hitpoints, experience, armour, elemental resistances, abilities, loot table and where it lives. Call this before quoting any creature stat or loot.',
     inputSchema: { type: 'object', properties: { creature: { type: 'string', description: 'Creature name, e.g. "Demon"' } }, required: ['creature'] }
   },
   {
     name: 'get_spell_info',
     description:
-      'Look up one Tibia spell by name or incantation: words, mana cost, level and vocation requirements, cooldown and effect.',
+      'Look up one Tibia spell by name or incantation such as "exura vita": words, mana cost, level and vocation requirements, cooldown and effect. Call this before quoting a mana cost or level requirement, including for spells you believe you already know.',
     inputSchema: { type: 'object', properties: { spell: { type: 'string', description: 'Spell name or incantation, e.g. "Ultimate Healing" or "exura vita"' } }, required: ['spell'] }
   },
   {
     name: 'get_npc_info',
     description:
-      'Look up one Tibia NPC: job, city, where to find them, and whether they trade.',
+      'Look up one Tibia NPC: job, city, where to find them, whether they trade, and which items they buy or sell and at what price.',
     inputSchema: { type: 'object', properties: { npc: { type: 'string', description: 'NPC name, e.g. "Rashid"' } }, required: ['npc'] }
   },
   {
     name: 'find_hunting_places',
     description:
-      'Suggest hunting grounds suited to a character level and vocation, with the loot and experience ratings and which creatures live there. Use for "where should I hunt at level X" questions.',
+      'Suggest hunting grounds suited to a character level and vocation, with the loot and experience ratings and which creatures live there. Call this before recommending anywhere to hunt — never answer "where should I hunt" from your own knowledge, as the recommendation must come from the catalog.',
     inputSchema: {
       type: 'object',
       properties: {
