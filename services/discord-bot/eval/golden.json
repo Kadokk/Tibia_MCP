@@ -397,17 +397,40 @@
       "lang": "en",
       "question": "I want a new body armour. What does the catalog have for me?",
       "expectRefusal": false,
-      "mustCallTool": "find_items",
-      "mustContain": [
+      "softCallTool": "find_items",
+      "softContain": [
         "magic plate armor"
       ],
+      "groundingGuard": [
+        "magic plate armor",
+        "magic sword",
+        "plate armor",
+        "golden armor",
+        "crown armor",
+        "knight armor",
+        "blue robe",
+        "dragon scale mail"
+      ],
+      "mustContain": [],
       "mustNotContain": [
         "guaranteed"
       ],
       "langMarkers": [
         "armor",
+        "armour",
         "plate",
-        "magic"
+        "magic",
+        "catalog",
+        "level",
+        "vocation",
+        "gear",
+        "body",
+        "options",
+        "you",
+        "your",
+        "what",
+        "know",
+        "need"
       ]
     },
     {

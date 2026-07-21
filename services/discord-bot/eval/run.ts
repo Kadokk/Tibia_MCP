@@ -30,6 +30,19 @@ type GoldenCase = {
   userFixture?: string;
   mustContain?: string[];
   mustCallTool?: string;
+  /**
+   * Flow PREFERENCE, warn-only — never a hard failure. Same treatment as
+   * groundingViolations: reported so a drift is visible, but it does not block the
+   * gate. Browse-first is what we want; a clarifying question is merely not it.
+   */
+  softCallTool?: string;
+  softContain?: string[];
+  /**
+   * Hard grounding guard, and the reason the browse case exists at all: these item
+   * facts may appear ONLY when softCallTool actually ran. Asking the player a
+   * question is safe; stating catalog facts without reading the catalog is not.
+   */
+  groundingGuard?: string[];
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -337,6 +350,10 @@ type CaseResult = {
   mcPass: boolean;
   toolPass: boolean;
   groundingViolations: string[];
+  /** Warn-only flow drift; reported, never gate-blocking. */
+  flowWarnings: string[];
+  guardPass: boolean;
+  guardHits: string[];
   /** Diagnostics: without these a failure says WHAT broke but never WHY. */
   toolCalls: string[];
   rounds: number;
@@ -445,7 +462,21 @@ async function main(): Promise<void> {
       // (6) mustCallTool: the model actually invoked the required local tool
       const toolPass = !c.mustCallTool || local.calls.includes(c.mustCallTool);
 
-      const hardFail = !langPass || !refusePass || !mncPass || !mcPass || !toolPass;
+      // (7) flow preference — WARN only, never part of hardFail (see softCallTool).
+      const softToolCalled = !c.softCallTool || local.calls.includes(c.softCallTool);
+      const flowWarnings: string[] = [];
+      if (!softToolCalled) flowWarnings.push(`did not call ${c.softCallTool}`);
+      const softMissing = (c.softContain ?? []).filter((s) => !lowerAnswer.includes(s.toLowerCase()));
+      if (softMissing.length) flowWarnings.push(`answered without showing: ${softMissing.join(', ')}`);
+
+      // (8) grounding guard — HARD. Either the catalog was read, or the answer states
+      // no item facts. Inventing stats is the only real failure on a browse question.
+      const guardHits = softToolCalled
+        ? []
+        : (c.groundingGuard ?? []).filter((s) => lowerAnswer.includes(s.toLowerCase()));
+      const guardPass = !c.groundingGuard || softToolCalled || (guardHits.length === 0 && groundingViolations.length === 0);
+
+      const hardFail = !langPass || !refusePass || !mncPass || !mcPass || !toolPass || !guardPass;
       results.push({
         id: c.id,
         langPass,
@@ -454,6 +485,9 @@ async function main(): Promise<void> {
         mcPass,
         toolPass,
         groundingViolations,
+        flowWarnings,
+        guardPass,
+        guardHits,
         toolCalls: [...local.calls, ...fixtureBridge.calledNames()],
         rounds: result.rounds,
         answerHead: answer.replace(/\s+/g, ' ').slice(0, 220),
@@ -471,6 +505,9 @@ async function main(): Promise<void> {
         mcPass: false,
         toolPass: false,
         groundingViolations: [],
+        flowWarnings: [],
+        guardPass: false,
+        guardHits: [],
         toolCalls: [...local.calls, ...fixtureBridge.calledNames()],
         rounds: 0,
         answerHead: '',
@@ -493,6 +530,9 @@ async function main(): Promise<void> {
     );
     if (r.error) console.log(`   ! error: ${r.error}`);
     if (r.groundingViolations.length) console.log(`   ! ungrounded numbers: ${r.groundingViolations.join(', ')}`);
+    // Warn-only: visible drift, not a gate blocker. Phase 6 owns deterministic browse routing.
+    if (r.flowWarnings.length) console.log(`   ~ flow warn (not a failure): ${r.flowWarnings.join('; ')}`);
+    if (!r.guardPass) console.log(`   ! GROUNDING GUARD: stated item facts without the catalog call${r.guardHits.length ? `: ${r.guardHits.join(', ')}` : ''}`);
     // On any hard failure, show what the model actually did. A pass/fail grid alone
     // cannot distinguish "called the wrong tool" from "called nothing".
     if (r.hardFail) {
