@@ -241,7 +241,7 @@ Per content type (`item|creature|spell|npc|hunt`): enumerate via `wikiApiClient`
 
 Six defs + routes (public data — registered BEFORE the premium gate, exactly like `get_quest_info`): `get_item_info(item)` (loose lookup → stats, requirements, npc buy/sell + which NPCs w/ per-NPC overrides, market value range, wiki link + attribution), `find_items(object_class?, slot?, max_level?, vocation?, sort_by?, limit≤10)`, `get_creature_info(creature)` (stats, resistances, abilities, loot w/ rarity, **spawn locations**, attribution), `get_spell_info(spell)` (name or incantation), `get_npc_info(npc)` (job, city, trades inverted from `catalog_npc_trade_offers`, capped), `find_hunting_places(level, vocation, limit≤5)` (per-vocation level filter, rating-ordered, creatures + best loot per row, attribution). Not-found → helpful "not in catalog" string (the model falls back to `search_wiki`).
 
-- [ ] **Step 1:** Failing tests: schemas, dispatch, tier-independence (tool list byte-identical across tiers), attribution present in every result, caps enforced. **Step 2:** Implement. **Step 3:** Gates green.
+- [x] **Step 1:** Failing tests: schemas, dispatch, tier-independence (tool list byte-identical across tiers), attribution present in every result, caps enforced. **Step 2:** Implement. **Step 3:** Gates green.
 
 **Exit:** router exposes 6 new tools, all tiers. **Commit:** `feat(agent): six SQL-backed catalog tools (Task 12)`
 
