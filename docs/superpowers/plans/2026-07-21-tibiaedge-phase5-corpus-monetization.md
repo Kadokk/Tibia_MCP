@@ -251,7 +251,7 @@ Six defs + routes (public data — registered BEFORE the premium gate, exactly l
 
 System prompt gains rule 9, named **CATALOG** (rule 1 is already named GROUNDING and covers "every fact from a tool result"; rule 9's distinct payload is tool *preference* + honest misses): item/creature/spell/NPC/hunting-place questions MUST go through the catalog tools; if the catalog has no row, say so or fall back to `search_wiki` — never fill the gap from memory. `main.ts` filters `search_item`, `search_creature`, `search_spell` out of the merged tool list (named exclusion set with a comment; `search_wiki`/`search_quest` stay). Eval harness gains catalog local-tool fakes backed by small fixture rows.
 
-- [ ] **Step 1:** Failing tests: prompt contains the rule; filtered list excludes exactly the three; eval fakes return fixture rows. **Step 2:** Implement. **Step 3:** Gates green (full `npx vitest run` — the tool-list change touches many snapshots).
+- [x] **Step 1:** Failing tests: prompt contains the rule; filtered list excludes exactly the three; eval fakes return fixture rows. **Step 2:** Implement. **Step 3:** Gates green (full `npx vitest run` — the tool-list change touches many snapshots).
 
 **Exit:** loop tool list = MCP minus 3 plus 6 local. **Commit:** `feat(agent): CATALOG prompt rule + redundant C++ search tools filtered from loop (Task 13)`
 
