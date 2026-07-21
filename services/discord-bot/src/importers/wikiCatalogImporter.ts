@@ -83,7 +83,7 @@ export class WikiCatalogImporter {
     runs: Pick<WikiImportRunRepository, 'start' | 'finish'>;
   }) {}
 
-  async run(contentType: CatalogImportType, opts?: { limit?: number }): Promise<CatalogImportSummary> {
+  async run(contentType: CatalogImportType, opts?: { limit?: number; force?: boolean }): Promise<CatalogImportSummary> {
     const config = TYPES[contentType];
     const runId = await this.deps.runs.start(contentType);
     let pagesSeen = 0, pagesUpdated = 0, pagesSkipped = 0, pagesFailed = 0;
@@ -93,14 +93,20 @@ export class WikiCatalogImporter {
       const titles = opts?.limit !== undefined ? all.slice(0, opts.limit) : all;
       pagesSeen = titles.length;
 
-      const stored = await this.deps.catalog.getRevisionMap(contentType);
+      // force re-reads every page in scope. It bypasses the gate rather than
+      // blanking source_revision first, so a forced run touches nothing it does not
+      // then re-import -- which is what made --force with --limit destructive.
+      const stored = opts?.force
+        ? new Map<string, number>()
+        : await this.deps.catalog.getRevisionMap(contentType);
       const live = await this.deps.wiki.fetchRevids(titles);
 
       // Revid gate: only pages that are new or edited since the last run cost a
       // content fetch. On a weekly re-run this is what keeps the job to minutes.
       const changed = titles.filter((title) => {
         const revid = live.get(title);
-        return revid !== undefined && stored.get(title) !== revid;
+        if (revid === undefined) return false;
+        return opts?.force === true || stored.get(title) !== revid;
       });
 
       const content = await this.deps.wiki.fetchContent(changed);

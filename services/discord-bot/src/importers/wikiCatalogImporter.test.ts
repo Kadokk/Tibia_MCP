@@ -376,3 +376,55 @@ describe('WikiCatalogImporter — failure handling', () => {
     expect(logged.every((arg) => arg === null || typeof arg !== 'object')).toBe(true);
   });
 });
+
+describe('WikiCatalogImporter — force', () => {
+  /**
+   * --force used to work by nulling source_revision for the whole content type
+   * before the run. With --limit that cleared thousands of rows and re-imported a
+   * handful, leaving the rest marked as never-imported. Bypassing the gate in the
+   * importer re-reads exactly the pages the run covers and mutates nothing up
+   * front.
+   */
+  it('re-imports a page whose stored revision still matches', async () => {
+    const { catalog, importer } = makeImporter({ stored: new Map([['Demon', 1191652]]) });
+
+    await importer.run('creature', { force: true });
+
+    expect(catalog.upsertCreature).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads no revision map at all when forcing, since it cannot matter', async () => {
+    const { catalog, importer } = makeImporter({ stored: new Map([['Demon', 1191652]]) });
+
+    await importer.run('creature', { force: true });
+
+    expect(catalog.getRevisionMap).not.toHaveBeenCalled();
+  });
+
+  it('still honours the page limit while forcing', async () => {
+    const { catalog, importer } = makeImporter({
+      enumerated: ['Demon', 'Dragon'],
+      revids: new Map([['Demon', 1], ['Dragon', 2]]),
+      stored: new Map([['Demon', 1], ['Dragon', 2]]),
+      content: new Map([['Demon', DEMON]])
+    });
+
+    await importer.run('creature', { force: true, limit: 1 });
+
+    expect(catalog.upsertCreature).toHaveBeenCalledTimes(1);
+  });
+
+  it('gates on revisions as usual when not forcing', async () => {
+    const { catalog, importer } = makeImporter({ stored: new Map([['Demon', 1191652]]) });
+
+    await importer.run('creature');
+
+    expect(catalog.getRevisionMap).toHaveBeenCalled();
+    expect(catalog.upsertCreature).not.toHaveBeenCalled();
+  });
+
+  it('no longer offers a way to blank stored revisions wholesale', () => {
+    const { catalog } = makeImporter();
+    expect((catalog as Record<string, unknown>).clearSourceRevisions).toBeUndefined();
+  });
+});

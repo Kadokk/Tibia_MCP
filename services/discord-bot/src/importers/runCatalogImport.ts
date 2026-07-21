@@ -6,9 +6,9 @@
  *   npm run import:catalog -- --type spell --limit 3
  *   npm run import:catalog -- --type creature --force   # re-parse every page
  *
- * --force clears the stored revisions first, so pages that have not been edited
- * are re-fetched and re-parsed. Needed after a parser fix: the revid gate would
- * otherwise skip them forever.
+ * --force re-imports every page in scope even if its revision is unchanged, which
+ * is what you want after a parser fix. It combines with --limit: only the pages the
+ * run actually covers are re-read, and nothing is mutated before they are.
  *
  * Makes zero model calls, so it needs no working OpenRouter key — but parseEnv
  * validates the whole app environment, so the Discord and MCP variables must be
@@ -89,17 +89,8 @@ async function main(): Promise<void> {
     runs: new WikiImportRunRepository(db)
   });
 
-  if (args.force) {
-    // Re-parse everything: the revid gate would otherwise skip rows whose pages
-    // have not changed, leaving data produced by an older parser in place.
-    for (const contentType of args.types) {
-      await catalog.clearSourceRevisions(contentType);
-      console.log(`${contentType}: cleared stored revisions, every page will re-parse`);
-    }
-  }
-
   for (const contentType of args.types) {
-    const summary = await importer.run(contentType, args.limit === undefined ? undefined : { limit: args.limit });
+    const summary = await importer.run(contentType, { limit: args.limit, force: args.force });
     // pagesSkipped is not a wiki_import_runs column — enumeration is a superset of
     // each type, so without it a creature run looks like it dropped a third of its
     // pages for no stated reason.
