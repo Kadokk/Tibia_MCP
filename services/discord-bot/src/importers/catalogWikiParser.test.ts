@@ -17,7 +17,9 @@ import {
   parseValueRange,
   mapNpc,
   mapSpell,
-  stripToPlainText
+  stripToPlainText,
+  mapHuntingPlace,
+  parseCreatureList
 } from './catalogWikiParser';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +43,7 @@ const ULTIMATE_HEALING = wikitextOf('catalog_spell.api.json', 'Ultimate Healing'
 const LEVITATE = wikitextOf('catalog_spell.api.json', 'Levitate');
 const ANNIHILATION = wikitextOf('catalog_spell.api.json', 'Annihilation');
 const RASHID = wikitextOf('catalog_npc_rashid.api.json', 'Rashid');
+const ELF_CAVE = wikitextOf('catalog_hunt.api.json');
 const WAVERIDER = wikitextOf('catalog_npc_rashid.api.json', 'Captain Waverider');
 
 const paramsOf = (wikitext: string) => parseInfoboxParams('Infobox Object', wikitext);
@@ -595,5 +598,82 @@ describe('stored strings never carry markup', () => {
       expect(stored).not.toContain('{{');
       expect(stored).not.toContain('}}');
     }
+  });
+});
+
+describe('parseCreatureList', () => {
+  it('reads the creature names out of the body CreatureList, skipping type=', () => {
+    expect(parseCreatureList(ELF_CAVE)).toEqual(['Snake', 'Elf', 'Elf Scout', 'Elf Arcanist']);
+  });
+
+  it('returns an empty array when the page has no CreatureList', () => {
+    expect(parseCreatureList(RASHID)).toEqual([]);
+  });
+});
+
+describe('mapHuntingPlace', () => {
+  const cave = () => mapHuntingPlace("Ab'Dendriel Elf Cave", ELF_CAVE, 748264);
+
+  it('maps the per-vocation level recommendations', () => {
+    expect(cave()).toMatchObject({
+      slug: 'ab-dendriel-elf-cave',
+      title: "Ab'Dendriel Elf Cave",
+      city: "Ab'Dendriel",
+      levelKnights: 20,
+      levelPaladins: 20,
+      levelMages: 25
+    });
+  });
+
+  it('maps the loot and experience ratings alongside their star counts', () => {
+    expect(cave()).toMatchObject({
+      lootRating: 'Bad',
+      lootStars: 2,
+      expRating: 'Bad',
+      expStars: 2
+    });
+  });
+
+  it('collects the numbered bestloot params in order', () => {
+    expect(cave()?.bestLoot).toEqual([
+      'Wand of Cosmic Energy', 'Elvish Bow', 'Holy Orchid', 'Yellow Gem', 'Life Crystal'
+    ]);
+  });
+
+  it('carries the body CreatureList onto the record', () => {
+    expect(cave()?.creatures).toEqual(['Snake', 'Elf', 'Elf Scout', 'Elf Arcanist']);
+  });
+
+  // location holds an inline {{Mapper Coords|...}} widget.
+  it('degrades location to plain text with no template markup', () => {
+    const location = cave()?.location ?? '';
+
+    expect(location).toBe("North-west of Ab'Dendriel.");
+    expect(location).not.toMatch(/[{}]/);
+    expect(location).not.toContain('Mapper Coords');
+  });
+
+  it('keeps the vocation guidance as text', () => {
+    expect(cave()?.vocations).toBe('All vocations.');
+  });
+
+  it('keeps skill and defence hints in attributes and drops the empty ones', () => {
+    const attributes = cave()?.attributes ?? {};
+
+    expect(attributes).toMatchObject({ skknights: '50', defknights: '50' });
+    expect(attributes).not.toHaveProperty('skmages');    // empty in the source
+    expect(attributes).not.toHaveProperty('defmages');
+    expect(attributes).not.toHaveProperty('bestloot');   // typed
+  });
+
+  it('always produces a wiki_url and keeps the source revision', () => {
+    expect(cave()).toMatchObject({
+      wikiUrl: "https://tibia.fandom.com/wiki/Ab'Dendriel_Elf_Cave",
+      sourceRevision: 748264
+    });
+  });
+
+  it('returns null for a page with no hunt infobox', () => {
+    expect(mapHuntingPlace('Demon', DEMON, 1)).toBeNull();
   });
 });

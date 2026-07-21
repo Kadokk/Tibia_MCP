@@ -677,3 +677,96 @@ export function mapNpc(title: string, wikitext: string, revid: number | null): C
     sourceRevision: revid
   };
 }
+
+// ---------------------------------------------------------------------------
+// Hunting places
+// ---------------------------------------------------------------------------
+
+export type CatalogHuntRecord = {
+  slug: string;
+  title: string;
+  city: string | null;
+  location: string | null;
+  vocations: string | null;
+  levelKnights: number | null;
+  levelPaladins: number | null;
+  levelMages: number | null;
+  lootRating: string | null;
+  lootStars: number | null;
+  expRating: string | null;
+  expStars: number | null;
+  bestLoot: string[];
+  creatures: string[];
+  attributes: Record<string, string>;
+  wikiUrl: string;
+  sourceRevision: number | null;
+};
+
+const HUNT_TYPED = new Set([
+  'city', 'location', 'vocation', 'lvlknights', 'lvlpaladins', 'lvlmages',
+  'loot', 'lootstar', 'exp', 'expstar'
+]);
+
+const HUNT_EXCLUDE = new Set(['notes', 'history', 'sounds', 'list', 'getvalue', 'name', 'image', 'map']);
+
+/** bestloot, bestloot2 ... bestloot5 — collected into the typed array instead. */
+const isBestLootParam = (key: string): boolean => /^bestloot\d*$/.test(key);
+
+/**
+ * Creature names from the page body's ==Creatures== section:
+ * "{{CreatureList|type=List/Sorted |Snake |Elf |Elf Scout}}" -> the positional
+ * entries. `type=` and any other named param is layout configuration, not a
+ * creature. Every CreatureList on the page is merged, since larger hunting
+ * grounds split their lists per floor.
+ *
+ * This is the only mapper input that comes from outside the infobox.
+ */
+export function parseCreatureList(wikitext: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const call of findTemplateCalls(wikitext)) {
+    if (call.name.toLowerCase() !== 'creaturelist') continue;
+    for (const entry of call.positional) {
+      const name = stripToPlainText(entry);
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+/** Maps a Hunt page to a typed record, or null if it carries no hunt infobox. */
+export function mapHuntingPlace(title: string, wikitext: string, revid: number | null): CatalogHuntRecord | null {
+  const params = parseInfoboxParams('Infobox Hunt', wikitext);
+  if (params.size === 0) return null;
+  const get = (k: string): string | undefined => params.get(k);
+
+  const bestLoot: string[] = [];
+  for (const key of ['bestloot', 'bestloot2', 'bestloot3', 'bestloot4', 'bestloot5']) {
+    const entry = stripToPlainText(get(key));
+    if (entry) bestLoot.push(entry);
+  }
+
+  return {
+    slug: slugify(title),
+    title,
+    city: clean(get('city')),
+    location: stripToPlainText(get('location'))?.slice(0, 500) ?? null,
+    vocations: clean(get('vocation')),
+    // The per-vocation recommendations are what ground "where should a level X
+    // <vocation> hunt", so they get typed columns rather than the residual bag.
+    levelKnights: coerceInt(get('lvlknights')),
+    levelPaladins: coerceInt(get('lvlpaladins')),
+    levelMages: coerceInt(get('lvlmages')),
+    lootRating: clean(get('loot')),
+    lootStars: coerceInt(get('lootstar')),
+    expRating: clean(get('exp')),
+    expStars: coerceInt(get('expstar')),
+    bestLoot,
+    creatures: parseCreatureList(wikitext),
+    attributes: residualAttributes(params, HUNT_TYPED, HUNT_EXCLUDE, isBestLootParam),
+    wikiUrl: wikiUrlFor(title),
+    sourceRevision: revid
+  };
+}
