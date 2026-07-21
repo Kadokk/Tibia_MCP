@@ -221,7 +221,7 @@ Curate the `{canonical, aliases}` seed (MSW→Magic Sword, SD→Sudden Death Run
 
 Per content type (`item|creature|spell|npc|hunt`): enumerate via `wikiApiClient` → batch-fetch revids → diff against `getRevisionMap` → batch-fetch content for changed/new slugs only → parse → upsert (+ trade-offer rebuild for items; alias merge per Task 9) → `wiki_import_runs` row per run with `content_type` and the EXISTING columns (`pages_seen` = enumerated, `pages_updated` = upserted, `pages_failed` = parse failures; skipped is derivable, no new columns; `llm_cost_usd_micros` always 0 here). Zero model calls (test asserts the AI client is never constructed/injected). Per-page parse failures are logged and counted, never abort the run.
 
-- [ ] **Step 1:** Failing tests: revid gate skips unchanged; changed-only content fetch; per-type bookkeeping incl. `content_type` in `start`'s SQL params; failure isolation. **Step 2:** Implement. **Step 3:** Gates green.
+- [x] **Step 1:** Failing tests: revid gate skips unchanged; changed-only content fetch; per-type bookkeeping incl. `content_type` in `start`'s SQL params; failure isolation. **Step 2:** Implement. **Step 3:** Gates green.
 
 **Exit:** importer fully unit-tested against fixtures. **Commit:** `feat(importers): wikiCatalogImporter — zero-LLM batched corpus pipeline (Task 10)`
 
