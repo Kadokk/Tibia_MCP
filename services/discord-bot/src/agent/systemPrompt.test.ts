@@ -100,3 +100,26 @@ describe('SYSTEM_PROMPT — rule 9 scope boundaries', () => {
     expect(rule9()).toMatch(/abbreviation|msw|alias/i);
   });
 });
+
+describe('SYSTEM_PROMPT — rule 9 browse-then-refine', () => {
+  const rule9 = (): string => /^9\. CATALOG:.*$/m.exec(SYSTEM_PROMPT)?.[0] ?? '';
+
+  /**
+   * A browse question ("what armour can I wear?") was being answered with a
+   * clarifying question instead of results. The catalog can already answer it from
+   * what the question and PLAYER NOTES supply, so refining first spends a turn and
+   * shows the player nothing.
+   */
+  it('tells the model to answer list questions with results, not questions', () => {
+    expect(rule9()).toMatch(/browse|list question/i);
+    expect(rule9()).toMatch(/show .*result|before asking/i);
+  });
+
+  it('says to reuse the filters it already has rather than asking for them', () => {
+    expect(rule9()).toMatch(/player notes|already/i);
+  });
+
+  it('puts any narrowing after the results, not before', () => {
+    expect(rule9()).toMatch(/never ask|rather than asking|then offer/i);
+  });
+});
