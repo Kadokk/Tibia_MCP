@@ -36,7 +36,7 @@ export async function executeMemoryCommand(input: {
     new ButtonBuilder().setCustomId('memory-wipe-confirm').setLabel('Yes, forget everything').setStyle(ButtonStyle.Danger)
   );
   const reply = await input.interaction.reply({
-    content: 'This deletes **everything**: linked characters, snapshots, memories, captures, and settings. This cannot be undone.',
+    content: 'This deletes everything I remember about you: linked characters, snapshots, memories, captures, and settings. This cannot be undone.\n\nYour subscription and payment records are kept \u2014 they are billing records rather than memories, and they contain nothing you have told me.',
     components: [row], ephemeral: true
   });
   try {

@@ -15,6 +15,9 @@ import { startProfileSyncScheduler } from './scheduler/profileSyncScheduler';
 import { startDistillScheduler } from './scheduler/distillScheduler';
 import { startQuestImportScheduler } from './scheduler/questImportScheduler';
 import { startCatalogImportScheduler } from './scheduler/catalogImportScheduler';
+import { startTierSyncScheduler } from './scheduler/tierSyncScheduler';
+import { EntitlementRepository } from './repositories/entitlementRepository';
+import { TierSyncService, type StripeApi } from './services/tierSyncService';
 import { createTibiaDataClient } from './sources/tibiaDataClient';
 import { AccessLimitsService } from './services/accessLimits';
 import { UsageRepository } from './repositories/usageRepository';
@@ -121,6 +124,57 @@ const catalogImporter = new WikiCatalogImporter({
   runs: importRuns
 });
 startCatalogImportScheduler(catalogImporter, { tickMs: env.catalogImportTickMs, enabled: env.catalogImportEnabled });
+
+// --- payments: Stripe Payment Link + outbound polling (Task 16 decision (b)) ---
+//
+// Polling, not webhooks: the VPS accepts no inbound connections (Design invariant
+// 8), so there is nothing to receive an event on. Two stages run per tick — see
+// TierSyncService for why session polling alone can grant but never revoke.
+//
+// OPS HANDOFF: payments default OFF and need no .env change to stay that way. To
+// enable, add PAYMENTS_ENABLED=true and STRIPE_SECRET_KEY=<key> to the VPS .env.
+// TIER_SYNC_TICK_MS (60s) and STRIPE_SESSION_LOOKBACK_MS (24h) have safe defaults;
+// the lookback is how far back a restart re-scans for missed signups, so widen it
+// if the bot is ever down longer than that.
+const entitlements = new EntitlementRepository(db);
+const stripeKey = env.stripeSecretKey;
+
+// Minimal REST client rather than the Stripe SDK: two GETs do not justify a new
+// dependency, and this matches how the wiki client's transport is built here too.
+const stripeApi: StripeApi = {
+  async listRecentCompletedSessions({ createdGte }) {
+    const url = `https://api.stripe.com/v1/checkout/sessions?status=complete&limit=100&created[gte]=${createdGte}`;
+    const res = await fetch(url, { headers: { authorization: `Bearer ${stripeKey ?? ''}` } });
+    if (!res.ok) throw new Error(`Stripe HTTP ${res.status}`);
+    const body = (await res.json()) as { data?: Array<{ id: string; client_reference_id: string | null; subscription: string | null }> };
+    return body.data ?? [];
+  },
+  async getSubscription(subscriptionId) {
+    const res = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+      headers: { authorization: `Bearer ${stripeKey ?? ''}` }
+    });
+    // A deleted subscription 404s; that is "no longer paying", not an error.
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Stripe HTTP ${res.status}`);
+    return (await res.json()) as { id: string; status: string };
+  }
+};
+
+const tierSync = new TierSyncService({
+  stripe: stripeApi,
+  entitlements,
+  tiers,
+  lookbackMs: env.stripeSessionLookbackMs
+});
+// Enabled only with both the switch and a key: a half-configured install polls
+// Stripe with an empty bearer token and fails every tick otherwise.
+startTierSyncScheduler(tierSync, {
+  tickMs: env.tierSyncTickMs,
+  enabled: env.paymentsEnabled && Boolean(stripeKey)
+});
+if (env.paymentsEnabled && !stripeKey) {
+  console.warn('PAYMENTS_ENABLED is true but STRIPE_SECRET_KEY is unset — tier sync stays off.');
+}
 
 const context = new PlayerContextService({ snapshots, settings, tiers, memory, captures, quests });
 const linkService = new LinkService({ tibiaData, links: linkedChars, tiers });

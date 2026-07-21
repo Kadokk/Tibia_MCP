@@ -29,7 +29,14 @@ const envSchema = z.object({
   QUEST_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false'),
   // Safe defaults: weekly, on. A deploy needs no .env change to pick the catalog up.
   CATALOG_IMPORT_TICK_MS: z.coerce.number().int().positive().default(604_800_000),
-  CATALOG_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false')
+  CATALOG_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false'),
+  // Payments are opt-in and default OFF, so a deploy needs no .env change to stay
+  // as it is. Turning them on requires PAYMENTS_ENABLED=true and STRIPE_SECRET_KEY;
+  // see the ops handoff note in main.ts.
+  PAYMENTS_ENABLED: z.string().default('false').transform((v) => v === 'true'),
+  STRIPE_SECRET_KEY: z.string().trim().min(1).optional(),
+  TIER_SYNC_TICK_MS: z.coerce.number().int().positive().default(60_000),
+  STRIPE_SESSION_LOOKBACK_MS: z.coerce.number().int().positive().default(86_400_000)
 });
 
 export type AppEnv = {
@@ -51,6 +58,10 @@ export type AppEnv = {
   questImportEnabled: boolean;
   catalogImportTickMs: number;
   catalogImportEnabled: boolean;
+  paymentsEnabled: boolean;
+  stripeSecretKey?: string;
+  tierSyncTickMs: number;
+  stripeSessionLookbackMs: number;
 };
 
 export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
@@ -73,6 +84,10 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     questImportTickMs: parsed.QUEST_IMPORT_TICK_MS,
     questImportEnabled: parsed.QUEST_IMPORT_ENABLED,
     catalogImportTickMs: parsed.CATALOG_IMPORT_TICK_MS,
-    catalogImportEnabled: parsed.CATALOG_IMPORT_ENABLED
+    catalogImportEnabled: parsed.CATALOG_IMPORT_ENABLED,
+    paymentsEnabled: parsed.PAYMENTS_ENABLED,
+    stripeSecretKey: parsed.STRIPE_SECRET_KEY,
+    tierSyncTickMs: parsed.TIER_SYNC_TICK_MS,
+    stripeSessionLookbackMs: parsed.STRIPE_SESSION_LOOKBACK_MS
   };
 }

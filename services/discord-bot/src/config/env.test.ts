@@ -76,6 +76,22 @@ describe('parseEnv', () => {
   it('parses CATALOG_IMPORT_ENABLED=false as a kill switch', () => {
     expect(parseEnv({ ...inlineValidEnvObject, CATALOG_IMPORT_ENABLED: 'false' }).catalogImportEnabled).toBe(false);
   });
+  it('leaves payments off by default so a deploy needs no .env change', () => {
+    const env = parseEnv(inlineValidEnvObject);
+    expect(env.paymentsEnabled).toBe(false);
+    expect(env.stripeSecretKey).toBeUndefined();
+  });
+  it('defaults the tier-sync tick to a minute and the session lookback to a day', () => {
+    const env = parseEnv(inlineValidEnvObject);
+    expect(env.tierSyncTickMs).toBe(60_000);
+    expect(env.stripeSessionLookbackMs).toBe(86_400_000);
+  });
+  it('enables payments only when explicitly turned on', () => {
+    expect(parseEnv({ ...inlineValidEnvObject, PAYMENTS_ENABLED: 'true' }).paymentsEnabled).toBe(true);
+  });
+  it('carries the stripe secret key through when supplied', () => {
+    expect(parseEnv({ ...inlineValidEnvObject, STRIPE_SECRET_KEY: 'sk_test_x' }).stripeSecretKey).toBe('sk_test_x');
+  });
   it('parses QUEST_IMPORT_ENABLED=false as a kill switch', () => {
     expect(parseEnv({ ...inlineValidEnvObject, QUEST_IMPORT_ENABLED: 'false' }).questImportEnabled).toBe(false);
   });

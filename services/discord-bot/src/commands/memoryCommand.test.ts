@@ -43,3 +43,31 @@ describe('executeMemoryCommand', () => {
     expect(interaction.editReply).toHaveBeenCalled();
   });
 });
+
+describe('/memory forget-all — billing-record retention', () => {
+  const runForgetAll = async () => {
+    const memory = { listActiveFacts: vi.fn(), deactivateFact: vi.fn(), forgetEverything: vi.fn().mockResolvedValue(undefined) };
+    const reply = { awaitMessageComponent: vi.fn().mockResolvedValue({ update: vi.fn() }) };
+    const interaction = { user: { id: 'u1' }, options: { getSubcommand: () => 'forget-all' }, reply: vi.fn().mockResolvedValue(reply) };
+    await executeMemoryCommand({ interaction: interaction as never, memory: memory as never, captures: { countForUser: vi.fn() } as never });
+    return String(interaction.reply.mock.calls[0][0].content);
+  };
+
+  /**
+   * Design invariant 9: entitlements are billing records, not memories. forget-all
+   * genuinely does not delete them — memoryRepository.forgetEverything touches
+   * captures, facts, relations, entities, quest progress, links and settings, and
+   * nothing else — so the copy must not promise "everything" without saying what
+   * is kept and why.
+   */
+  it('warns that subscription records are kept before asking to confirm', async () => {
+    const content = await runForgetAll();
+
+    expect(content).toMatch(/subscription|billing|payment/i);
+    expect(content).toMatch(/kept|retain|not deleted/i);
+  });
+
+  it('still says plainly that the wipe cannot be undone', async () => {
+    expect(await runForgetAll()).toMatch(/cannot be undone/i);
+  });
+});
