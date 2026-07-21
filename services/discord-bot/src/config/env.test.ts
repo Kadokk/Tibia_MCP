@@ -7,7 +7,7 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
+      OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp',
       NODE_ENV: 'test'
     });
@@ -16,7 +16,6 @@ describe('parseEnv', () => {
     expect(env.discordClientId).toBe('123456789012345678');
     expect(env.databaseUrl).toContain('postgres://');
     expect(env.nodeEnv).toBe('test');
-    expect(env.anthropicApiKey).toBe('sk-ant-test');
     expect(env.mcpServerCommand).toBe('/app/bin/tibia-mcp');
   });
 
@@ -25,11 +24,10 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
+      OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
     });
 
-    expect(env.anthropicModel).toBe('claude-haiku-4-5');
     expect(env.aiDailySpendCapUsd).toBe(0.7);
     expect(env.tibiaDataBaseUrl).toBe('https://api.tibiadata.com');
     expect(env.mcpServerCwd).toBeUndefined();
@@ -40,7 +38,7 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
+      OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
     });
 
@@ -52,7 +50,7 @@ describe('parseEnv', () => {
       DISCORD_TOKEN: 'token',
       DISCORD_CLIENT_ID: '123456789012345678',
       DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-      ANTHROPIC_API_KEY: 'sk-ant-test',
+      OPENROUTER_API_KEY: 'sk-or-test',
       MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
     });
 
@@ -63,7 +61,7 @@ describe('parseEnv', () => {
     DISCORD_TOKEN: 'token',
     DISCORD_CLIENT_ID: '123456789012345678',
     DATABASE_URL: 'postgres://user:password@localhost:5432/db',
-    ANTHROPIC_API_KEY: 'sk-ant-test',
+    OPENROUTER_API_KEY: 'sk-or-test',
     MCP_SERVER_COMMAND: '/app/bin/tibia-mcp'
   };
 
@@ -73,6 +71,47 @@ describe('parseEnv', () => {
   });
   it('parses QUEST_IMPORT_ENABLED=false as a kill switch', () => {
     expect(parseEnv({ ...inlineValidEnvObject, QUEST_IMPORT_ENABLED: 'false' }).questImportEnabled).toBe(false);
+  });
+
+  it('parses the required OpenRouter API key', () => {
+    expect(parseEnv(inlineValidEnvObject).openrouterApiKey).toBe('sk-or-test');
+  });
+
+  // parseEnv is called uncaught in main.ts / runQuestImport.ts, so this message is
+  // exactly what ops sees in the crash-loop logs — it has to name the missing var.
+  it('names OPENROUTER_API_KEY when it is missing', () => {
+    // An unset env var arrives as undefined, which is how process.env presents it.
+    expect(() => parseEnv({ ...inlineValidEnvObject, OPENROUTER_API_KEY: undefined })).toThrow(/OPENROUTER_API_KEY/);
+  });
+
+  it('rejects an empty OPENROUTER_API_KEY', () => {
+    expect(() => parseEnv({ ...inlineValidEnvObject, OPENROUTER_API_KEY: '' })).toThrow(/OPENROUTER_API_KEY/);
+  });
+
+  it('defaults AI_MODEL and AI_MAX_OUTPUT_TOKENS', () => {
+    const env = parseEnv(inlineValidEnvObject);
+
+    expect(env.aiModel).toBe('qwen/qwen3.6-flash');
+    expect(env.aiMaxOutputTokens).toBe(4096);
+    expect(typeof env.aiMaxOutputTokens).toBe('number');
+  });
+
+  it('respects AI_MODEL and AI_MAX_OUTPUT_TOKENS overrides', () => {
+    const env = parseEnv({ ...inlineValidEnvObject, AI_MODEL: 'anthropic/claude-haiku-4.5', AI_MAX_OUTPUT_TOKENS: '2048' });
+
+    expect(env.aiModel).toBe('anthropic/claude-haiku-4.5');
+    expect(env.aiMaxOutputTokens).toBe(2048);
+    expect(typeof env.aiMaxOutputTokens).toBe('number');
+  });
+
+  // Zod strips unknown keys, so a leftover ANTHROPIC_* value in the server .env
+  // after the OpenRouter migration is harmless — no need for ops to scrub it.
+  it('silently ignores a stale ANTHROPIC_API_KEY / ANTHROPIC_MODEL', () => {
+    const env = parseEnv({ ...inlineValidEnvObject, ANTHROPIC_API_KEY: 'sk-ant-stale', ANTHROPIC_MODEL: 'claude-haiku-4-5' });
+
+    expect(env.openrouterApiKey).toBe('sk-or-test');
+    expect(env).not.toHaveProperty('anthropicApiKey');
+    expect(env).not.toHaveProperty('anthropicModel');
   });
 
   it('rejects missing required values', () => {

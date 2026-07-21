@@ -10,15 +10,14 @@
     "lint": "eslint src",
     "build": "tsc -p tsconfig.json",
     "eval": "tsx eval/run.ts",
-    "eval:prefix": "tsx eval/prefixTokens.ts",
     "eval:distill": "tsx eval/distill.ts",
     "import:quests": "tsx src/importers/runQuestImport.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.111.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.7",
+    "openai": "^6.48.0",
     "pg": "^8.13.1",
     "zod": "^3.24.1"
   },
