@@ -15,7 +15,7 @@ MCP data server. Freemium SaaS direction. All data comes from public, ToS-legal 
 | Component | Path | Status | Notes |
 |---|---|---|---|
 | **Data MCP** (`tibia-mcp`) | `src/` | ✅ Working, tested | 14 read-only tools over stdio JSON-RPC; TibiaData API + TibiaWiki/Bazaar scraping (incl. NPC buy/sell prices, `refresh_bazaar_history` + `valuate_auction` for ended-auction comparables); SQLite cache (WAL, per-tool TTLs, stale fallback). 58 tests. |
-| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | ✅ v1 code-complete | 13 slash commands (12 fully wired; `/setup` still a placeholder). `/ask` agent loop over OpenRouter (model configurable via `AI_MODEL`) with a daily spend circuit breaker; second-brain memory (capture → distill → recall); quest companion with a TibiaWiki quest importer; 4 background schedulers; Postgres with 4 auto-applied migrations. 336 vitest tests; 20/20 golden-set eval. Live smoke tests pending first deploy. |
+| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | ✅ Phase 5 code-complete | 14 slash commands (13 fully wired; `/setup` still a placeholder). `/ask` agent loop over OpenRouter (model configurable via `AI_MODEL`, default `anthropic/claude-haiku-4.5`) with a daily spend circuit breaker; second-brain memory (capture → distill → recall); quest companion; a TibiaWiki catalog of items, creatures, spells, NPCs and hunting places behind six SQL-backed tools; Stripe-backed premium tiers via outbound polling; 6 background schedulers; Postgres with 6 auto-applied migrations. 697 vitest tests; 29-case golden eval. |
 | **Protocol library / trade listener / parser** | archived | 📦 Archived (git tag `archive/live-listener`) | Packet reading is permanently out of scope — see the [assistant design spec](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md). |
 
 Legend: ✅ working · ⚠️ partial · 🚧 scaffolding · ⛔ blocked · 📦 archived.
@@ -125,16 +125,24 @@ variable table is in [`docs/deploy.md`](docs/deploy.md) §4; the essentials are 
    `archive/live-listener`); packet reading permanently out of scope.
 3. **TibiaEdge v1** — complete on `main`: Phase 0 (hygiene) → Phase 1 (core assistant:
    `/ask` agent loop, quotas, Docker) → Phase 2 (identity: character links, profiles) →
-   Phase 3 (memory distillation & continuity) → Phase 4 (quest companion), merged 2026-07-16.
+   Phase 3 (memory distillation & continuity) → Phase 4 (quest companion), merged 2026-07-16;
+   Phase 5 (corpus grounding + monetization) on `feat/v2-phase5-corpus-monetization`.
 
 Quest/wiki content is used under **CC BY-SA 3.0** (TibiaWiki); the bot attributes and links
 back to the wiki in its answers.
 
 ## Roadmap
 
-1. **First live deployment** (`docs/deploy.md`) and the full
-   [beta checklist](docs/beta-deployment-checklist.md) — live smoke tests for Phases 1–4,
-   full quest import (≥ 400 quests), caching/quota/circuit-breaker drills.
-2. **`v0.2.0-beta` tag** (human operator, after the checklist) and rollout to 2–3 friendly
-   Discord servers with a week of usage/spend tracking.
-3. **Phase 5 planning** — next feature phase, scoped after beta feedback.
+1. **Phase 5 — shipped.** Full TibiaWiki corpus imported into SQL catalog tables (items,
+   creatures, spells, NPCs, hunting places, NPC trade offers) by a zero-LLM batched
+   importer; six SQL-backed catalog tools with CC BY-SA attribution on every answer; a
+   CATALOG prompt rule that requires a lookup before quoting a stat; monetization via a
+   Stripe Payment Link with outbound polling; `/upgrade` and unified premium CTAs.
+2. **Launch gates** — see the [launch checklist](docs/launch-checklist.md). Marketing is
+   gated on the [CipSoft fansite inquiry](docs/fansite-inquiry.md) being sent; then the
+   attribution audit, cross-user-leak drill and pricing copy review, then a rollout week.
+   The Phase 5 exit gate is one stranger paying, unprompted.
+3. **Phase 6 — next.** Insight engine and weekly digest; `/export vault`; a decision on
+   self-hosting the TibiaData container. Also queued: `/price` onto catalog aliases
+   (retiring the C++ search tools), an isolation eval case, and recording failed page
+   titles on import runs.

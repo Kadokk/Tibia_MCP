@@ -318,3 +318,59 @@ all five content types imported by the zero-LLM batched pipeline in one run,
   integer overflow (wiki value 3,956,839,569 > int4); retry left a PARTIAL row while
   reporting failed=1 → fix is BIGINT column width + per-page atomicity (no partial
   rows on failure), then targeted item re-import. Counts above exclude the partial row.
+
+---
+
+## Phase 5 sign-off (corpus grounding + monetization)
+
+Recorded 2026-07-21 on `feat/v2-phase5-corpus-monetization`. Steps 1 and 3 of Task 20;
+Step 2 (live golden eval) and Step 4 (push/merge approval) are tracked separately below.
+
+### What shipped
+
+| Area | Detail |
+|---|---|
+| Corpus | Migration 005: `catalog_items`, `catalog_creatures`, `catalog_spells`, `catalog_npcs`, `catalog_hunting_places`, `catalog_npc_trade_offers`. Imported by a **zero-LLM** batched importer — infoboxes are structured data, so no model call is made or needed; asserted at source level as well as behaviourally. |
+| Import pipeline | Shared `wikiApiClient` (transclusion enumeration, 50-title batching), five infobox mappers, a curated item-alias seed, revid-gated incremental runs, weekly scheduler plus a `--type/--limit/--force` CLI. |
+| Tools | Six SQL-backed catalog tools — `get_item_info`, `find_items`, `get_creature_info`, `get_spell_info`, `get_npc_info`, `find_hunting_places` — public on every tier, each carrying the CC BY-SA notice and wiki link. Three superseded C++ search tools filtered out of the loop's tool list. |
+| Prompt | Rule 9 CATALOG: a lookup is required before quoting any stat, price or recommendation, browse questions answer with results before asking refinements, refusals and broad concept questions are exempt, and a miss is stated honestly rather than filled from memory. |
+| Payments | Stripe Payment Link + **outbound polling** (Task 16 decision (b); Discord App Subscriptions is unavailable to an MX-based owner). Two-stage: session polling learns the user↔subscription link, subscription-status polling grants and revokes. Migration 006 `entitlements`; tier writes guarded so `admin`, `disabled` and `guild_pro` are never touched. |
+| Commands | `/upgrade` with tier status, limit-derived benefits and an env-injected personal payment link; the same CTA line added to all five premium walls. |
+| Docs | [`docs/payments-evaluation.md`](payments-evaluation.md) (decision recorded), [`docs/launch-checklist.md`](launch-checklist.md), [`docs/fansite-inquiry.md`](fansite-inquiry.md). |
+
+### Gate evidence
+
+- **Step 1 — ✅** `npx vitest run` 697 tests / 67 files green; `tsc --noEmit` green (now
+  covering `eval/` too, via `tsconfig.check.json`); `eslint src` green.
+- **Step 2 — ⏳ pending (Brain).** Live golden eval on `anthropic/claude-haiku-4.5`. Last
+  recorded run: **28/28 clean**; the suite has since grown to 29 cases with the Task 18
+  gating case, so a fresh run is required before this can be ticked.
+- **Step 3 — ✅** version `0.1.0 → 0.3.0`, README roadmap, this block.
+- **Step 4 — ⏳ human gate.** Push/PR approval, then merge approval. Untouched.
+
+### Corrections to the Task 15 entry above
+
+- **Naga Nest — RESOLVED**, and not the way that entry predicted. The overflowing value was
+  not a real wiki number: `itemid = 39568,39569` lists two client ids, and `coerceInt`
+  strips commas for thousand separators, fusing them into `3956839569`. Widening the column
+  to BIGINT would have stored that fabricated id permanently instead of failing loudly, so
+  it was **not** widened — a corpus scan of 160 sampled items found no field anywhere
+  exceeding int4. The parser now takes the first id (`5053cf0`).
+- **Per-page atomicity — RESOLVED** (`577ed71`), and the underlying bug was worse than a
+  partial row. The item upsert committed the new `source_revision` before the trade-offer
+  rebuild ran; a failure between them left the revision advanced with stale offers, so the
+  next run's revid gate skipped the page as unchanged — permanently. Both writes are now one
+  data-modifying CTE, so a failed page leaves nothing behind and is retried.
+- **`/price` attribution — RESOLVED** (`d379ebe`). Found while writing the launch checklist:
+  the C++ `search_item` tool returns wiki-derived data with no notice, and `/price` relayed
+  it verbatim. The command now appends the same source-link-plus-notice footer the catalog
+  tools emit.
+
+### Known open items (not merge gates)
+
+- CipSoft fansite inquiry drafted but **not sent** — blocks marketing, not merge.
+- Discord monetization-requirements policy question — written inquiry owed to Discord
+  developer support; blocks launch, not merge.
+- No isolation eval case; the manual two-account drill is the only end-to-end check.
+- Import runs count failed pages but record no failing titles; one page in the full item run
+  fails every time and cannot currently be identified from the run row.
