@@ -1,0 +1,43 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 4501,
+        "ns": 0,
+        "title": "Doll",
+        "revisions": [
+          {
+            "revid": 1043042,
+            "parentid": 1010086,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Object|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Doll\n| article       = a\n| actualname    = doll\n| plural        = ?\n| itemid        = 2991\n| objectclass   = Household Items\n| primarytype   = Dolls and Bears\n| implemented   = 6.0\n| immobile      = no\n| walkable      = yes\n| pickupable    = yes\n| weight        = 6.50\n| stackable     = No\n| marketable    = yes\n| droppedby     = {{Dropped By|Piñata Dragon|Wild Warrior}}\n| value         = 200\n| npcvalue      = 200\n| npcprice      = 0\n| buyfrom       = --\n| sellto        = Rashid\n| notes         = A semi-common doll, can be used for decoration and roleplaying purposes.\n}}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 5023,
+        "ns": 0,
+        "title": "Silver Key",
+        "revisions": [
+          {
+            "revid": 1043652,
+            "parentid": 1016014,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Object|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Silver Key\n| article       = a\n| actualname    = silver key\n| plural        = silver keys\n| itemid        = 2969\n| objectclass   = Tools and other Equipment\n| primarytype   = Keys\n| implemented   = 3.1\n| immobile      = no\n| walkable      = yes\n| pickupable    = yes\n| usable        = yes\n| weight        = 1.00\n| droppedby     = {{Dropped By|}}\n| value         = ?\n| npcvalue      = 0\n| npcprice      = 0\n| npcvaluerook  = 0\n| npcpricerook  = 0\n| buyfrom       = --\n| sellto        = --\n| notes         = For a list of silver keys, see [[Keys by Type/Silver Key]].<br>Looks the same as a [[Silver Key (Outpost)]] and [[Theodore Loveless' Key]].\n}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
