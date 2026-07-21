@@ -63,17 +63,16 @@ export const localToolDefs: McpToolDef[] = [
   {
     name: 'find_items',
     description:
-      'List catalog items matching a name fragment, object class, equipment slot, or maximum level requirement. Use whenever the player is browsing or comparing rather than asking about one named item — "what armour can I wear at level 40", "what should I buy next". Use get_item_info instead only when they named a specific item.',
+      'List catalog items by any combination of name fragment, object class, equipment slot and maximum level requirement — at least one. Use whenever the player is browsing or comparing rather than asking about one named item: "what armour can I wear at level 40", "what should I buy next". For a whole category filter on object_class or slot and leave search empty; putting the category into search matches item NAMES and finds nothing. Use get_item_info instead only when they named a specific item.',
     inputSchema: {
       type: 'object',
       properties: {
-        search: { type: 'string', description: 'Name fragment, e.g. "helmet"' },
-        object_class: { type: 'string', description: 'Object class, e.g. "Body Equipment", "Runes"' },
+        search: { type: 'string', description: 'Name fragment only, e.g. "helmet" or "plate" — not a category name. Leave empty when filtering by class or slot.' },
+        object_class: { type: 'string', description: 'Object class, e.g. "Body Equipment", "Runes", "Weapons"' },
         slot: { type: 'string', description: 'Equipment slot, e.g. "Body", "Head"' },
         max_level: { type: 'number', description: 'Highest level requirement to include' },
         limit: { type: 'number', description: 'How many to return (max 10)' }
-      },
-      required: ['search']
+      }
     }
   },
   {
@@ -419,15 +418,32 @@ async function getNpcInfo(deps: LocalToolDeps, args: Record<string, unknown>): P
 }
 
 async function findItems(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
-  const search = String(args.search ?? '');
-  const rows = await deps.catalog.findItems({
-    search,
+  // An empty search must be omitted, not passed as '': the repository only skips the
+  // name predicate when the field is absent, and '' becomes `title ILIKE '%%'`.
+  const searchRaw = args.search === undefined ? '' : String(args.search).trim();
+  const filters = {
+    search: searchRaw === '' ? undefined : searchRaw,
     objectClass: args.object_class === undefined ? undefined : String(args.object_class),
     slot: args.slot === undefined ? undefined : String(args.slot),
-    maxLevel: Number.isFinite(Number(args.max_level)) ? Number(args.max_level) : undefined,
-    limit: boundedLimit(args.limit, FIND_ITEMS_CAP)
-  });
-  if (!rows.length) return { text: `No items in the catalog match "${search}".`, isError: false };
+    maxLevel: Number.isFinite(Number(args.max_level)) ? Number(args.max_level) : undefined
+  };
+  // Everything-in-the-catalog is never a useful answer; ask for a narrowing.
+  if (Object.values(filters).every((v) => v === undefined)) {
+    return {
+      text: 'Narrow the search first: give a name fragment, an object class (e.g. "Body Equipment"), an equipment slot, or a maximum level.',
+      isError: false
+    };
+  }
+  const rows = await deps.catalog.findItems({ ...filters, limit: boundedLimit(args.limit, FIND_ITEMS_CAP) });
+  if (!rows.length) {
+    const described = [
+      filters.search && `name containing "${filters.search}"`,
+      filters.objectClass && `class "${filters.objectClass}"`,
+      filters.slot && `slot "${filters.slot}"`,
+      filters.maxLevel !== undefined && `level ${filters.maxLevel} or below`
+    ].filter(Boolean).join(', ');
+    return { text: `No items in the catalog match ${described}.`, isError: false };
+  }
   return {
     text: joinLines([
       ...rows.map((i) => `- **${i.title}**${i.object_class ? ` (${i.object_class})` : ''}` +

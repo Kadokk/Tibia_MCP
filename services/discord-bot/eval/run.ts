@@ -261,9 +261,26 @@ function makeLocalCatalog(calls: string[]): { catalog: LocalToolDeps['catalog'] 
         if (matches(name, 'magic sword', 'msw')) return EVAL_MAGIC_SWORD;
         return null;   // an unknown item is what makes the honest-miss case observable
       },
-      findItems: async (f: { search?: string }) => {
+      /**
+       * Mirrors catalogRepository.findItems rather than approximating it: each
+       * filter narrows independently, and an absent search means "no name
+       * constraint", not "match nothing". The previous version matched three
+       * hardcoded substrings and ignored object_class/slot/max_level entirely,
+       * so a well-formed filter-only call returned [] here while production
+       * returned rows — an eval failure with no product defect behind it.
+       */
+      findItems: async (f: {
+        search?: string; objectClass?: string; slot?: string; maxLevel?: number;
+      }) => {
         calls.push('find_items');
-        return matches(f.search ?? '', 'armor', 'armour', 'plate') ? [EVAL_ITEM] : [];
+        const rows = [EVAL_ITEM, EVAL_MAGIC_SWORD];
+        return rows.filter((r) =>
+          (f.search === undefined || matches(r.title, f.search.toLowerCase()) ||
+            matches(r.actual_name, f.search.toLowerCase())) &&
+          (f.objectClass === undefined || r.object_class.toLowerCase() === f.objectClass.toLowerCase()) &&
+          (f.slot === undefined || (r.slot ?? '').toLowerCase() === f.slot.toLowerCase()) &&
+          (f.maxLevel === undefined || r.level_required === null || r.level_required <= f.maxLevel)
+        );
       },
       findCreatureLoose: async (name: string) => {
         calls.push('get_creature_info');

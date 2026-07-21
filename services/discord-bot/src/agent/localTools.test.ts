@@ -196,14 +196,26 @@ describe('catalog tools', () => {
     'get_spell_info', 'get_npc_info', 'find_hunting_places'
   ];
 
+  // find_items is deliberately exempt: every one of its filters is optional and any
+  // combination is valid, so it validates "at least one" in the handler instead.
+  // Requiring `search` is what pushed models to invent category fragments that
+  // match no item title.
+  const REQUIRE_AN_ARG = CATALOG_TOOLS.filter((n) => n !== 'find_items');
+
   it('declares a schema for each catalog tool with a required argument', () => {
-    for (const name of CATALOG_TOOLS) {
+    for (const name of REQUIRE_AN_ARG) {
       const def = localToolDefs.find((t) => t.name === name);
       expect(def, `${name} must be declared`).toBeDefined();
       const schema = def!.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
       expect(schema.required?.length, `${name} needs a required arg`).toBeGreaterThan(0);
       expect(JSON.stringify(schema)).not.toMatch(/user/i);
     }
+  });
+
+  it('declares find_items with every filter optional and no user id', () => {
+    const def = localToolDefs.find((t) => t.name === 'find_items');
+    expect(def).toBeDefined();
+    expect(JSON.stringify(def!.inputSchema)).not.toMatch(/user/i);
   });
 
   it('looks an item up loosely and renders its stats', async () => {
@@ -598,5 +610,82 @@ describe('catalog tools — npc trade offers', () => {
       const r = await router.bind('u1', 'free').callTool(name, args);
       expect(r.text).toContain('CC BY-SA');
     }
+  });
+});
+
+describe('find_items — filter-only browsing', () => {
+  /**
+   * The schema required `search`, so a browse question ("what body armour can I
+   * wear") forced the model to invent a name fragment. Inventing the category —
+   * "body equipment" — searches item TITLES for it, and no title contains its own
+   * object class, so the user was told the catalog was empty for a class holding
+   * thousands of rows. The repository always supported filter-only queries.
+   */
+  it('filters by object class with no search term at all', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { object_class: 'Body Equipment' });
+
+    const arg = (deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0];
+    expect(arg.objectClass).toBe('Body Equipment');
+    expect(arg.search).toBeUndefined();   // absent, not '' — '' becomes ILIKE '%%'
+  });
+
+  it('filters by slot alone', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { slot: 'Body' });
+
+    const arg = (deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0];
+    expect(arg.slot).toBe('Body');
+    expect(arg.search).toBeUndefined();
+  });
+
+  it('filters by max level alone, which the description advertises', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { max_level: 40 });
+
+    const arg = (deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0];
+    expect(arg.maxLevel).toBe(40);
+    expect(arg.search).toBeUndefined();
+  });
+
+  it('treats an empty search string as no name constraint', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { search: '   ', object_class: 'Runes' });
+
+    expect((deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0].search)
+      .toBeUndefined();
+  });
+
+  it('still passes a real search term through', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { search: 'plate' });
+
+    expect((deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0].search)
+      .toBe('plate');
+  });
+
+  // Listing the entire catalog is never a useful answer; ask for a narrowing instead.
+  it('asks for a filter rather than querying with none', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('find_items', {});
+
+    expect((deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems).not.toHaveBeenCalled();
+    expect(r.isError).toBe(false);
+    expect(r.text).toMatch(/object class|slot|level|name/i);
+  });
+
+  it('no longer forces the model to supply a search term', () => {
+    const def = localToolDefs.find((t) => t.name === 'find_items');
+    const schema = def!.inputSchema as { required?: string[] };
+
+    expect(schema.required ?? []).not.toContain('search');
+  });
+
+  // The failure mode that made this reachable: putting a category into `search`.
+  it('warns in its description that a category belongs in object_class, not search', () => {
+    const def = localToolDefs.find((t) => t.name === 'find_items');
+
+    expect(def!.description).toMatch(/object_class/);
+    expect(JSON.stringify(def!.inputSchema)).toMatch(/name fragment|not a category|category/i);
   });
 });
