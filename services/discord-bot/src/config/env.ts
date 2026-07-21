@@ -2,6 +2,14 @@ import { z } from 'zod';
 
 const snowflakeSchema = z.string().trim().regex(/^\d{17,20}$/, 'must be a Discord snowflake');
 
+/**
+ * Default model for the agent loop and the distiller. Exported so the eval
+ * harness can fall back to the same value instead of hardcoding its own: a
+ * divergence there means an eval run silently grades a different model than
+ * production ships with.
+ */
+export const DEFAULT_AI_MODEL = 'anthropic/claude-haiku-4.5';
+
 const envSchema = z.object({
   DISCORD_TOKEN: z.string().trim().min(1),
   DISCORD_CLIENT_ID: snowflakeSchema,
@@ -9,7 +17,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().trim().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   OPENROUTER_API_KEY: z.string().trim().min(1),
-  AI_MODEL: z.string().trim().default('qwen/qwen3.6-flash'),
+  AI_MODEL: z.string().trim().default(DEFAULT_AI_MODEL),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
   MCP_SERVER_COMMAND: z.string().trim().min(1),          // path to tibia-mcp binary
   MCP_SERVER_CWD: z.string().trim().optional(),          // where its sqlite cache lives
@@ -18,7 +26,20 @@ const envSchema = z.object({
   PROFILE_SYNC_TICK_MS: z.coerce.number().int().positive().default(300_000),
   DISTILL_TICK_MS: z.coerce.number().int().positive().default(300_000),
   QUEST_IMPORT_TICK_MS: z.coerce.number().int().positive().default(604_800_000),
-  QUEST_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false')
+  QUEST_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false'),
+  // Safe defaults: weekly, on. A deploy needs no .env change to pick the catalog up.
+  CATALOG_IMPORT_TICK_MS: z.coerce.number().int().positive().default(604_800_000),
+  CATALOG_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false'),
+  // Payments are opt-in and default OFF, so a deploy needs no .env change to stay
+  // as it is. Turning them on requires PAYMENTS_ENABLED=true and STRIPE_SECRET_KEY;
+  // see the ops handoff note in main.ts.
+  PAYMENTS_ENABLED: z.string().default('false').transform((v) => v === 'true'),
+  STRIPE_SECRET_KEY: z.string().trim().min(1).optional(),
+  // The Payment Link /upgrade sends players to. Never hardcoded: the repo is public
+  // and the link is account-specific.
+  STRIPE_PAYMENT_LINK_URL: z.string().trim().url().optional(),
+  TIER_SYNC_TICK_MS: z.coerce.number().int().positive().default(60_000),
+  STRIPE_SESSION_LOOKBACK_MS: z.coerce.number().int().positive().default(86_400_000)
 });
 
 export type AppEnv = {
@@ -38,6 +59,13 @@ export type AppEnv = {
   distillTickMs: number;
   questImportTickMs: number;
   questImportEnabled: boolean;
+  catalogImportTickMs: number;
+  catalogImportEnabled: boolean;
+  paymentsEnabled: boolean;
+  stripeSecretKey?: string;
+  stripePaymentLinkUrl?: string;
+  tierSyncTickMs: number;
+  stripeSessionLookbackMs: number;
 };
 
 export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
@@ -58,6 +86,13 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     profileSyncTickMs: parsed.PROFILE_SYNC_TICK_MS,
     distillTickMs: parsed.DISTILL_TICK_MS,
     questImportTickMs: parsed.QUEST_IMPORT_TICK_MS,
-    questImportEnabled: parsed.QUEST_IMPORT_ENABLED
+    questImportEnabled: parsed.QUEST_IMPORT_ENABLED,
+    catalogImportTickMs: parsed.CATALOG_IMPORT_TICK_MS,
+    catalogImportEnabled: parsed.CATALOG_IMPORT_ENABLED,
+    paymentsEnabled: parsed.PAYMENTS_ENABLED,
+    stripeSecretKey: parsed.STRIPE_SECRET_KEY,
+    stripePaymentLinkUrl: parsed.STRIPE_PAYMENT_LINK_URL,
+    tierSyncTickMs: parsed.TIER_SYNC_TICK_MS,
+    stripeSessionLookbackMs: parsed.STRIPE_SESSION_LOOKBACK_MS
   };
 }

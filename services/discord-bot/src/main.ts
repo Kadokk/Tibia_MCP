@@ -8,12 +8,16 @@ import { createDbClient } from './db/client';
 import { loadMigrations, runMigrations } from './db/migrationRunner';
 import { runAsk, toAiTools } from './agent/agentLoop';
 import { createAiClient } from './ai/client';
-import { createToolRouter, localToolDefs } from './agent/localTools';
+import { buildLoopToolDefs, createToolRouter } from './agent/localTools';
 import { connectMcp } from './mcp/mcpClient';
 import { startRefreshScheduler } from './scheduler/refreshScheduler';
 import { startProfileSyncScheduler } from './scheduler/profileSyncScheduler';
 import { startDistillScheduler } from './scheduler/distillScheduler';
 import { startQuestImportScheduler } from './scheduler/questImportScheduler';
+import { startCatalogImportScheduler } from './scheduler/catalogImportScheduler';
+import { startTierSyncScheduler } from './scheduler/tierSyncScheduler';
+import { EntitlementRepository } from './repositories/entitlementRepository';
+import { TierSyncService, type StripeApi } from './services/tierSyncService';
 import { createTibiaDataClient } from './sources/tibiaDataClient';
 import { AccessLimitsService } from './services/accessLimits';
 import { UsageRepository } from './repositories/usageRepository';
@@ -34,6 +38,9 @@ import { QuestEligibilityService } from './services/questEligibilityService';
 import { QuestSeedService } from './services/questSeedService';
 import { QUEST_LINE_LABEL_MAP } from './services/questLineLabelMap';
 import { WikiQuestImporter, WIKI_USER_AGENT } from './importers/wikiQuestImporter';
+import { WikiApiClient } from './importers/wikiApiClient';
+import { WikiCatalogImporter } from './importers/wikiCatalogImporter';
+import { CatalogRepository } from './repositories/catalogRepository';
 import type { Tier } from './services/tiers';
 import { createDiscordClient, startDiscordBot } from './discord/createClient';
 import { createInteractionDispatcher } from './discord/interactionDispatcher';
@@ -100,6 +107,75 @@ const questImporter = new WikiQuestImporter({
 });
 startQuestImportScheduler(questImporter, { tickMs: env.questImportTickMs, enabled: env.questImportEnabled });
 
+// Catalog corpus: zero model calls, so no ai/usage deps. Its scheduler waits out a
+// fixed delay before the first sweep rather than kicking at boot.
+const catalog = new CatalogRepository(db);
+const catalogImporter = new WikiCatalogImporter({
+  wiki: new WikiApiClient({
+    http: {
+      getJson: (url) =>
+        fetch(url, { headers: { 'user-agent': WIKI_USER_AGENT } }).then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
+        )
+    },
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  }),
+  catalog,
+  runs: importRuns
+});
+startCatalogImportScheduler(catalogImporter, { tickMs: env.catalogImportTickMs, enabled: env.catalogImportEnabled });
+
+// --- payments: Stripe Payment Link + outbound polling (Task 16 decision (b)) ---
+//
+// Polling, not webhooks: the VPS accepts no inbound connections (Design invariant
+// 8), so there is nothing to receive an event on. Two stages run per tick — see
+// TierSyncService for why session polling alone can grant but never revoke.
+//
+// OPS HANDOFF: payments default OFF and need no .env change to stay that way. To
+// enable, add PAYMENTS_ENABLED=true and STRIPE_SECRET_KEY=<key> to the VPS .env.
+// TIER_SYNC_TICK_MS (60s) and STRIPE_SESSION_LOOKBACK_MS (24h) have safe defaults;
+// the lookback is how far back a restart re-scans for missed signups, so widen it
+// if the bot is ever down longer than that.
+const entitlements = new EntitlementRepository(db);
+const stripeKey = env.stripeSecretKey;
+
+// Minimal REST client rather than the Stripe SDK: two GETs do not justify a new
+// dependency, and this matches how the wiki client's transport is built here too.
+const stripeApi: StripeApi = {
+  async listRecentCompletedSessions({ createdGte }) {
+    const url = `https://api.stripe.com/v1/checkout/sessions?status=complete&limit=100&created[gte]=${createdGte}`;
+    const res = await fetch(url, { headers: { authorization: `Bearer ${stripeKey ?? ''}` } });
+    if (!res.ok) throw new Error(`Stripe HTTP ${res.status}`);
+    const body = (await res.json()) as { data?: Array<{ id: string; client_reference_id: string | null; subscription: string | null }> };
+    return body.data ?? [];
+  },
+  async getSubscription(subscriptionId) {
+    const res = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+      headers: { authorization: `Bearer ${stripeKey ?? ''}` }
+    });
+    // A deleted subscription 404s; that is "no longer paying", not an error.
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Stripe HTTP ${res.status}`);
+    return (await res.json()) as { id: string; status: string };
+  }
+};
+
+const tierSync = new TierSyncService({
+  stripe: stripeApi,
+  entitlements,
+  tiers,
+  lookbackMs: env.stripeSessionLookbackMs
+});
+// Enabled only with both the switch and a key: a half-configured install polls
+// Stripe with an empty bearer token and fails every tick otherwise.
+startTierSyncScheduler(tierSync, {
+  tickMs: env.tierSyncTickMs,
+  enabled: env.paymentsEnabled && Boolean(stripeKey)
+});
+if (env.paymentsEnabled && !stripeKey) {
+  console.warn('PAYMENTS_ENABLED is true but STRIPE_SECRET_KEY is unset — tier sync stays off.');
+}
+
 const context = new PlayerContextService({ snapshots, settings, tiers, memory, captures, quests });
 const linkService = new LinkService({ tibiaData, links: linkedChars, tiers });
 
@@ -108,11 +184,11 @@ startProfileSyncScheduler(profileSync, { tickMs: env.profileSyncTickMs });
 
 // The tool router binds the Discord user id (and tier) at dispatch time — the id
 // is never a model-visible parameter — and satisfies runAsk's mcp.callTool dep.
-const router = createToolRouter({ mcp, memory, captures, quests, questEligibility });
+const router = createToolRouter({ mcp, memory, captures, quests, questEligibility, catalog });
 
 // ONE merged tool list: MCP defs then local defs, fetched once at startup so every
 // request advertises the same tools across users, tiers, and questions.
-const tools = toAiTools([...(await mcp.listTools()), ...localToolDefs]);
+const tools = toAiTools(buildLoopToolDefs(await mcp.listTools()));
 
 const distill = new DistillService({
   ai: aiClient, captures, memory, entities, links: linkedChars, tiers, usage,
@@ -128,7 +204,8 @@ const commands = buildRegistry({
   access, usage, tiers, ask, context, captures, settings,
   dailySpendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000),
   mcp, tibiaData, linkService, memory, links: linkedChars, snapshots,
-  quests, questEligibility, questSeed
+  quests, questEligibility, questSeed,
+  paymentLinkUrl: env.stripePaymentLinkUrl
 });
 
 await registerCommands({ token: env.discordToken, clientId: env.discordClientId, guildId: env.discordGuildId });

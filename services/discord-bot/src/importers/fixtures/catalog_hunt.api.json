@@ -1,0 +1,25 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 10932,
+        "ns": 0,
+        "title": "Ab'Dendriel Elf Cave",
+        "revisions": [
+          {
+            "revid": 748264,
+            "parentid": 664500,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Hunt\n| name            = Ab'Dendriel Elf Cave\n| image           = Elf\n| implemented     = 6.2\n| city            = Ab'Dendriel\n| location        = North-west of Ab'Dendriel, {{Mapper Coords|127.134|123.131|7|3|text=here}}.\n| vocation        = All vocations.\n| lvlknights      = 20\n| lvlpaladins     = 20\n| lvlmages        = 25\n| skknights       = 50\n| skpaladins      = 50\n| skmages         = \n| defknights      = 50\n| defpaladins     =\n| defmages        =\n| loot            = Bad\n| lootstar        = 2\n| exp             = Bad\n| expstar         = 2\n| bestloot        = Wand of Cosmic Energy\n| bestloot2       = Elvish Bow\n| bestloot3       = Holy Orchid\n| bestloot4       = Yellow Gem\n| bestloot5       = Life Crystal\n| map             = Ab'Dendriel_Elf_Cave.png\n}}\nThere is a cave north-west of [[Ab'Dendriel]] where a number of [[elves]] live. It is somewhat difficult to find, and you will need a [[Machete]] or a [[Heavy Machete]] to reach it.\n\nThere are two ways to access this cave, both ways require a [[Machete]] or a [[Heavy Machete]].\n\n*From the North:\n** Fall down this hole {{Mapper Coords|127.134|123.108|7|3|text=here}}\n** Walk underground, you will face 2 [[Bat]]s. You will come up {{Mapper Coords|127.115|123.115|7|3|text=here}}\n*From the South:\n** You can walk around the south side of the swamp area ({{Mapper Coords|127.107|123.149|7|3|text=here}}) and use your [[Machete]]/[[Heavy Machete]] to cut down the [[Jungle Grass]].\n\nNow walk to the cave {{Mapper Coords|127.134|123.131|7|3|text=here}}. \n\nThere are about 6 [[Snake]]s and 3 [[Elf|Elves]] on the surface.\n\nUp the rope spot you will find 3 [[Elf|Elves]]. There is a total of 7 [[Elf|Elves]], 4 [[Elf Scout]]s and 1 [[Elf Arcanist]] in the dungeon. [[Knight]]s, be careful: If you chase an [[Elf Scout]], there is a good chance you will attract more enemies, and they can easily kill you.\n\n== Creatures ==\n{{CreatureList|type=List/Sorted\n |Snake\n |Elf\n |Elf Scout\n |Elf Arcanist\n}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -4,6 +4,7 @@ import type { UserTierRepository } from '../repositories/userTierRepository';
 import { getTierLimits } from '../services/tiers';
 import { sanitizeFact } from '../services/factSanitizer';
 import { createTextResponse, type CommandResponse } from './types';
+import { UPGRADE_CTA } from '../services/tiers';
 
 export async function executeGoalsCommand(input: {
   interaction: Pick<ChatInputCommandInteraction, 'user'> & {
@@ -16,7 +17,7 @@ export async function executeGoalsCommand(input: {
   const sub = input.interaction.options.getSubcommand();
   const limits = getTierLimits(await input.tiers.getTier(userId));
   if (limits.memoryFacts <= 0) {
-    return createTextResponse('Goals are a premium feature (persistent memory + goals + insights). `/link` personalization stays free.', true);
+    return createTextResponse(`Goals are a premium feature (persistent memory + goals + insights). \`/link\` personalization stays free.\n${UPGRADE_CTA}`, true);
   }
 
   if (sub === 'set') {

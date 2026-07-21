@@ -1,17 +1,18 @@
 {
   "name": "@tibiaedge/discord-bot",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx src/main.ts",
     "test": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "lint": "eslint src",
     "build": "tsc -p tsconfig.json",
     "eval": "tsx eval/run.ts",
     "eval:distill": "tsx eval/distill.ts",
-    "import:quests": "tsx src/importers/runQuestImport.ts"
+    "import:quests": "tsx src/importers/runQuestImport.ts",
+    "import:catalog": "tsx src/importers/runCatalogImport.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -1,0 +1,61 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 795,
+        "ns": 0,
+        "title": "Find Person",
+        "revisions": [
+          {
+            "revid": 1182699,
+            "parentid": 1178163,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Spell|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Find Person\n| spellid       = 20\n| type          = Instant\n| subclass      = Support\n| words         = exiva \"name\"\n| premium       = no\n| mana          = 20\n| levelrequired = 8\n| cooldown      = 2\n| cooldowngroup = 2\n| voc           = [[Druid]]s, [[Paladin]]s, [[Sorcerer]]s, [[Knight]]s and [[Monk]]s\n| effect        = Tells you which direction a certain player is, relative to you, and a rough idea of the distance.\n| notes         = If the player's name consists of only one word, you may omit the quotation marks. A player's name can be shorted using the ~ symbol, e.g {{Message|type=chat|Exiva \"Daron Digur\"}} works the same as {{Message|type=chat|Exiva Daron~}}, as long as there is only one character name matching this shortcut. When trying to exiva a [[CipSoft Members|CipSoft Member]], the `~` symbol can not be used.\n\n'''Results explanation'''\n\nAn analysis was made by [[TibiaMaps]] ([https://tibiamaps.io/blog/exiva link here]) to explain how the spell works in detail. When the player you exiva...\n\n* is 0–4 squares away: {{Message|type=look|[Player] is standing next to you.}}\n* is 0–4 squares away + on a different floor: {{Message|type=look|[Player] is above/below you.}}\n* is 5–100 squares away: {{Message|type=look|[Player] is to the [direction].}}\n* is 5–100 squares away + on a different floor: {{Message|type=look|[Player] is on a higher/lower level to the [direction].}}\n* is 101–250 squares away: {{Message|type=look|[Player] is far to the [direction].}}\n* is ≥251 squares away: {{Message|type=look|[Player] is very far to the [direction].}}\n| history       = * Before the [[Updates/8.00|Summer Update of 2007]], if this spell was cast for a person that was offline, it would not consume any mana.\n* In 2004, the spell was very narrowed down and most of the times it would not give any specific heading to where the target was. From 2004 onwards, the spell was revised and it started saying \"very far to north\" or \"far to the north\" in order to improve the location.\n* Before March 2015, the Find Person spell would not [[Exhaust]] players if the player was not online or did not exist on the game world; this would allow players to spend a lot of mana in a short time, primarily to contribute to [[magic level]] training.\n* On the 21<sup>st</sup> of November 2017, the spell was changed for [[Optional PvP]] game worlds after [[CipSoft]] consulted players through a [[Dev Notes|Dev Note]]. Since then, players can determine which characters are able to find them in a new dialog window in the Tibia Client. {{OfficialNewsArchive|4375|News Article on Tibia.com}}.\n| libraryname        = findperson\n| librarytext        = Another cheap, but useful spell that is highly popular with all vocations, Find Person will allow the caster to locate the life essence of any character that is currently online. Unfortunately, it is not possible to identify the exact whereabouts due to the complexity of this ritual. Rather, the caster will only learn the general direction in which the targeted character can be found. For this reason it may be necessary to cast the spell a couple of times before you will meet the character you are looking for. Players on Optional PvP game worlds can use a button in the chat console to determine which characters are able to find their characters with this spell.\n}}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 799,
+        "ns": 0,
+        "title": "Light Healing",
+        "revisions": [
+          {
+            "revid": 1182813,
+            "parentid": 1164234,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Spell|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Light Healing\n| spellid       = 1\n| type          = Instant\n| subclass      = Healing\n| words         = exura\n| premium       = no\n| mana          = 20\n| basepower     = 40\n| levelrequired = 8\n| cooldown      = 1\n| cooldowngroup = 1\n| voc           = [[Paladin]]s, [[Druid]]s, [[Sorcerer]]s, [[Monk]]s\n| effect        = Restores a small amount of [[HP|health]] and cures [[paralysis]].\n| notes         = A rather weak, but popular and efficient healing spell. Cast by a high level mage, it has about 25% of the power of [[Ultimate Healing]]. \n| history       = * It was the only healing spell available for [[knight]]s for many years until [[Wound Cleansing]] was introduced in the [[Winter Update 2007]].\n* Knights can not use it since the [[Winter Update 2010]].\n* Learning Light Healing used to cost 170 [[gp]], but since the [[Winter Update 2012]], it is free.\n| libraryname        = lighthealing\n| librarytext        = This spell is awarded free to all newly chosen paladins, druids, sorcerers and monks. Although its salutary effect is limited, its development represented a major breakthrough in spell research. For the first time, adventurers could quickly heal their own wounds and injuries, significantly increasing their chances to survive the dangers they are daily confronted with. Even today, Light Healing is still a very popular spell because of its reasonable mana cost.\n}}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 50799,
+        "ns": 0,
+        "title": "Great Fireball Rune",
+        "revisions": [
+          {
+            "revid": 1189801,
+            "parentid": 1189778,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "<noinclude>\n:''This article is about the item called Great Fireball Rune. For the spell to create them, see [[Great Fireball]].''\n</noinclude>{{Infobox Object|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Great Fireball Rune\n| article       = a\n| actualname    = great fireball rune\n| plural        = ?\n| itemid        = 3191\n| objectclass   = Runes\n| primarytype   = Attack Runes\n| secondarytype = Area Runes\n| words         = adori mas flam\n| implemented   = 7.6\n| lightradius   = 1\n| lightcolor    = 215\n| immobile      = no\n| walkable      = yes\n| pickupable    = yes\n| usable        = yes\n| levelrequired = 30\n| vocrequired   = monks, druids, sorcerers, paladins, knights\n| mlrequired    = 4\n| damagetype    = Fire\n| weight        = 0.52\n| stackable     = yes\n| marketable    = yes\n| droppedby     = {{Dropped By|}}\n| value         = \n| storevalue    = {{Store Trades|{{Store Product|12|amount=250}}}}\n| npcvalue      = 0\n| npcprice      = 64\n| buyfrom       = Asima, Chartan, Chuckles, Fenech, Frans, Frederik, Ghorza, Gnomegica, Khanna, Mordecai, Nelly, Onfroi, Rabaz, Rachel, Rock In A Hard Place, Romir, Shiriel, Siflind, Sigurd, Talila, Tandros, Topsy, Valindara, Xodet\n| sellto        = --\n| basepower     = 50\n| notes         = [[File:Burned Icon.gif]] Shoots a large circular flame attack based on the center of the selected area, this is the [[Sorcerer]]s' equivalent of the [[Avalanche]].<br />This rune is really useful to get rid of big groups of monsters when the character gets surrounded or when you need to clear a room. It once was available to make at level 23, however this was changed in an update.<br />\nFor the spell, see [[Great Fireball]].\n| history       = The sprite produced by a [[Great Fireball Rune]] changed in the [[Updates/8.1|2007 Winter Update]]. It used to look like this:<br/>\n[[File:Great fireball1.gif]]\nThe price was changed from 57 to 64 since [[Summer Update 2024]].\n}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

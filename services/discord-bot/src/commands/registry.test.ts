@@ -90,7 +90,13 @@ describe('command registry', () => {
 
   it('exports Discord registration payloads with the expected option shapes', () => {
     expect(registeredCommands.every((command) => typeof command.data.toJSON === 'function')).toBe(true);
-    expect(commandRegistrationPayloads).toHaveLength(13);
+    expect(commandRegistrationPayloads).toHaveLength(14);
+
+    // /upgrade takes no options: the purchase link is built from the caller's own
+    // id, never from anything the player types.
+    const upgrade = commandRegistrationPayloads.find((c) => c.name === 'upgrade');
+    expect(upgrade, '/upgrade must be registered').toBeDefined();
+    expect(upgrade?.options ?? []).toHaveLength(0);
 
     const price = commandRegistrationPayloads.find((c) => c.name === 'price');
     expect(price?.options).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'item', required: true })]));

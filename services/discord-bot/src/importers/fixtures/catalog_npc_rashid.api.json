@@ -1,0 +1,43 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 8554,
+        "ns": 0,
+        "title": "Captain Waverider",
+        "revisions": [
+          {
+            "revid": 1178786,
+            "parentid": 1114208,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox NPC|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name         = Captain Waverider\n| job          = Ferryman\n| location     = [[Liberty Bay]] ({{Mapper Coords|126.88|128.87|7|2|text=here}}), [[Treasure Island]] ({{Mapper Coords|125.132|128.145|7|4|text=here}}) and [[Treasure Hunt Island]] ({{Mapper Coords|125.45|128.163|7|4|text=here}})\n| posx3        = 125.43\n| posy3        = 128.163\n| posz3        = 7\n| posx2        = 125.131\n| posy2        = 128.145\n| posz2        = 7\n| posx         = 126.91\n| posy         = 128.91\n| posz         = 7\n| gender       = Male\n| race         = Human\n| buysell      = no\n| implemented  = 7.8\n| notes        = Part of [[The Shattered Isles Quest]] and the [[Treasure Hunt Quest]].\n{{TransportList|discount=no\n |{{TransportCell|Liberty Bay|50}}\n |{{TransportCell|Meriana|50|After completing the ''Access to Meriana'' mission of [[The Shattered Isles Quest]] and by saying {{KW|peg leg}}}}\n |{{TransportCell|Treasure Hunt Island|0|During a mission of the [[Treasure Hunt Quest]]}}\n |{{TransportCell|Treasure Island|200}}\n |{{TransportCell|Travora|1,000}}\n}}\n| subarea3     = Nargor\n| geolabel3    = Treasure Hunt Island\n| subarea2     = Treasure Island\n| city         = Liberty Bay\n| city2        = Liberty Bay\n}}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "pageid": 20103,
+        "ns": 0,
+        "title": "Rashid",
+        "revisions": [
+          {
+            "revid": 1097793,
+            "parentid": 1096826,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox NPC|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name         = Rashid\n| job          = Merchant\n| location     = Travels around between [[Carlin]] and various [[Premium]] cities.\n| predictloc   = {{Map Image|npc=yes\n|posx={{#switch:{{#time: l |now + {{#expr:3600*{{Rashid Location/DST}}}} seconds - 10 hours }}|Monday=125.210|Tuesday=126.46|Wednesday=127.66|Thursday=129.43|Friday=129.213|Saturday=129.146|Sunday=126.71}}\n|posy={{#switch:{{#time: l |now + {{#expr:3600*{{Rashid Location/DST}}}} seconds - 10 hours }}|Monday=121.179|Tuesday=128.69|Wednesday=127.243|Thursday=128.114|Friday=126.224|Saturday=124.66|Sunday=124.39}}\n|posz={{#switch:{{#time: l |now + {{#expr:3600*{{Rashid Location/DST}}}} seconds - 10 hours }}|Monday=7|Tuesday=7|Wednesday=7|Thursday=6|Friday=7|Saturday=6|Sunday=6}}\n|link=yes}}<br />Today is '''{{#time: l |now + {{#expr:3600*{{Rashid Location/DST}}}} seconds - 10 hours }}''' so you will find Rashid in '''{{#switch:{{#time: l |now + {{#expr:3600*{{Rashid Location/DST}}}} seconds - 10 hours }}|Monday=Svargrond|Tuesday=Liberty Bay|Wednesday=Port Hope|Thursday=Ankrahmun|Friday=Darashia|Saturday=Edron|Sunday=Carlin}}'''. <span style=\"font-size:smaller;\">(If it is not {{#time: l |now + {{#expr:3600*{{Rashid Location/DST}}}} seconds - 10 hours }} in Tibia, [{{FULLURL:Rashid|action=purge}} purge the cache].)</span>\n| city         = Svargrond\n| geolabel     = Svargrond\n| posx         = 125.210\n| posy         = 121.182\n| posz         = 7\n| city2        = Liberty Bay\n| geolabel2    = Liberty Bay\n| posx2        = 126.47\n| posy2        = 128.67\n| posz2        = 7\n| city3        = Port Hope\n| geolabel3    = Port Hope\n| posx3        = 127.65\n| posy3        = 127.241\n| posz3        = 7\n| city4        = Ankrahmun\n| geolabel4    = Ankrahmun\n| posx4        = 129.45\n| posy4        = 128.118\n| posz4        = 6\n| city5        = Darashia\n| geolabel5    = Darashia\n| posx5        = 129.214\n| posy5        = 126.227\n| posz5        = 7\n| city6        = Edron\n| geolabel6    = Edron\n| posx6        = 129.150\n| posy6        = 124.57\n| posz6        = 6\n| city7        = Carlin\n| geolabel7    = Carlin\n| posx7        = 126.71\n| posy7        = 124.39\n| posz7        = 6\n| gender       = Male\n| race         = Human\n| buysell      = yes\n| sounds       = {{Sound List|}}\n| implemented  = 8.10\n| notes        = [[File:Rashid_Big.png|thumb|right|300px]] You need to win his trust before selling any items to him. He travels to a different city everyday.<p>\nThis [[NPC]] changes his location everyday.<br />\nOn '''Mondays''' you can find him in [[Svargrond]], in [[Dankwart]]'s tavern, south of the temple.<br />\nOn '''Tuesdays''' you can find him in [[Liberty Bay]], in [[Lyonel]]'s tavern, west of the depot.<br />\nOn '''Wednesdays''' you can find him in [[Port Hope]], in [[Clyde]]'s tavern, west of the depot.<br />\nOn '''Thursdays''' you can find him in [[Ankrahmun]], in [[Arito]]'s tavern, above the post office.<br />\nOn '''Fridays''' you can find him in [[Darashia]], in [[Miraia]]'s tavern, south of the guildhalls.<br />\nOn '''Saturdays''' you can find him in [[Edron]], in [[Mirabell]]'s tavern, above the depot.<br />\nOn '''Sundays''' you can find him in [[Carlin]] depot, one floor above.\n\nTo be able to trade with him, you must complete [[The Traveling Trader Quest]].</p>\n}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

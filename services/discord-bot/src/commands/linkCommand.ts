@@ -2,6 +2,7 @@ import type { ChatInputCommandInteraction } from 'discord.js';
 import type { LinkService } from '../services/linkService';
 import type { QuestSeedService } from '../services/questSeedService';
 import { createTextResponse, type CommandResponse } from './types';
+import { UPGRADE_CTA } from '../services/tiers';
 
 export async function executeLinkCommand(input: {
   interaction: Pick<ChatInputCommandInteraction, 'user' | 'deferReply' | 'editReply'> & {
@@ -41,7 +42,7 @@ export async function executeLinkCommand(input: {
       case 'not_found':
         return createTextResponse(`I could not find a character named "${character}" on tibia.com — check the spelling.`, true);
       case 'cap_reached':
-        return createTextResponse(`Your tier allows ${r.limit} linked character(s). Remove one with \`/link remove\`, or upgrade to premium for more.`, true);
+        return createTextResponse(`Your tier allows ${r.limit} linked character(s). Remove one with \`/link remove\`, or upgrade to premium for more.\n${UPGRADE_CTA}`, true);
       case 'already_verified':
         return createTextResponse(`**${r.characterName}** is already linked and verified.`, true);
     }

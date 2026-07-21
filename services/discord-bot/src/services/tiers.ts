@@ -1,3 +1,13 @@
+/** The locked price, quoted in one place so copy cannot drift between surfaces. */
+export const PREMIUM_PRICE_LABEL = 'about $4.99/month';
+
+/**
+ * The single upsell call to action. Every premium wall appends this, so a player
+ * who hits one always learns the same next step instead of five phrasings of
+ * "upgrade" that point nowhere.
+ */
+export const UPGRADE_CTA = 'See what premium adds and how to get it with `/upgrade`.';
+
 export type Tier = 'free' | 'pro' | 'guild_pro' | 'admin' | 'disabled';
 
 export type TierLimits = Readonly<{

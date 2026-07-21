@@ -5,6 +5,7 @@ import type { LinkedCharacterRepository, LinkedCharacterRow } from '../repositor
 import type { UserTierRepository } from '../repositories/userTierRepository';
 import { getTierLimits } from '../services/tiers';
 import { createTextResponse, type CommandResponse } from './types';
+import { UPGRADE_CTA } from '../services/tiers';
 
 /** Prefer the verified main character; else the first verified link. */
 function resolveMainLink(links: LinkedCharacterRow[]): LinkedCharacterRow | null {
@@ -30,7 +31,7 @@ export async function executeQuestCommand(input: {
     if (sub === 'track') {
       const cap = getTierLimits(await input.tiers.getTier(userId)).trackedQuests;
       if ((await input.quests.countTracked(userId)) >= cap) {
-        return createTextResponse(`You are tracking ${cap} quests (free cap). TibiaEdge premium tracks unlimited quests.`, true);
+        return createTextResponse(`You are tracking ${cap} quests (free cap). TibiaEdge premium tracks unlimited quests.\n${UPGRADE_CTA}`, true);
       }
     }
 

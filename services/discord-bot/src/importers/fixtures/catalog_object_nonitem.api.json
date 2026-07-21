@@ -1,0 +1,25 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 1122,
+        "ns": 0,
+        "title": "Fire",
+        "revisions": [
+          {
+            "revid": 1011382,
+            "parentid": 916426,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "<noinclude>{{seealso|Fire Damage|Burning|usage=article}}</noinclude><!--\n-->{{Infobox Object|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Fire\n| itemid        = 2118\n| objectclass   = Magical Effects\n| primarytype   = Fields\n| implemented   = 4.0\n| lightradius   = 7\n| lightcolor    = 200\n| immobile      = yes\n| walkable      = yes\n| walkingspeed  =  \n| pickupable    = no\n| location      = Can be found anywhere outside of [[Protection Zone]]s, but more likely to be found in hot places.\n| notes         = Fire is one of the raw elements that formed when the goddess [[Tibiasula]] died and was formed into the world. The [[Pyromancers]], sons and daughters of fire, are [[Dwarves]] who worship the fire element.<br />\nStepping on these will [[Burning|burn]] you causing 20 damage which is then followed by 7 turns of 10 damage each until the burn wears off.<br />\nCan be made with a [[Fire Field Rune]]. The first stage of fire fields created this way lasts 3:20; the second stage lasts for 2:28; the last stage (that doesn't cause any damage) lasts 1:38. Total time that a fire field will block a monster is 5:48.<br />\n[[File:Fire.gif]]\n[[File:Fire (Medium).gif]] \n[[File:Fire (Small).gif]]\n}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

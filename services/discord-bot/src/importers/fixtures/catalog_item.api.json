@@ -1,0 +1,25 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 1593,
+        "ns": 0,
+        "title": "Plate Armor",
+        "revisions": [
+          {
+            "revid": 1147293,
+            "parentid": 1113776,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Object|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Plate Armor\n| article       = a\n| actualname    = plate armor\n| plural        = ?\n| itemid        = 3357\n| objectclass   = Body Equipment\n| primarytype   = Armors\n| slot          = Body\n| sounds        = {{Sound List|}}\n| implemented   = 3.0\n| immobile      = no\n| walkable      = yes\n| pickupable    = yes\n| upgradeclass  = 1\n| armor         = 10\n| weight        = 120.00\n| stackable     = no\n| marketable    = yes\n| droppedby     = {{Dropped By|Ancient Lion Knight|Ancient Scarab|Behemoth|Black Knight|Bonebeast|Brutus Bloodbeard|Crystal Spider|Cursed Ape|Deadeye Devious|Destroyer|Dreadbeast|Giant Spider|Giant Spider (Nostalgia)|Hairman the Huge|High Templar Cobrass|Kongra|Lethal Lissy|Lizard Templar|Loricate Orger|Lucifuga Aranea|Memory of a Pirate|Memory of a Scarab|Naga Warrior|Orc Cult Fanatic|Orc Leader|Orc Warlord|Pirate Buccaneer|Quara Pincher Scout|Ron the Ripper|Sacred Spider|The Snapper|Undead Elite Gladiator|Undead Gladiator|Valkyrie|Warlord Ruzad}}\n| value         = 400 - 800\n| npcvalue      = 400\n| npcprice      = 1200\n| npcvaluerook  = 0\n| npcpricerook  = 0\n| buyfrom       = Azil, Baltim, Brengus, Cedrik, Cornelia, Esrik, Flint, Hardek, Kroox, Memech, Morpel, Robert, Rock In A Hard Place, Sam, Shanar, Turvy, Ulrik, Willard, Yanni\n| sellto        = Azil, Baltim, Brengus, Cedrik, Cornelia, Esrik, Flint, H.L.: 110, Hardek, Kroox, Memech, Morpel, Robert, Rock In A Hard Place, Sam, Shanar, Turvy, Ulrik, Willard, Yanni\n| notes         = This armor is used by mostly all players in lower levels, because it's easy to get and provides good defense. It is the next armor to get after [[Scale Armor]].<br />\nFor a mage, the more suitable armor with same defense is a [[Mammoth Fur Cape]]. [[Knight]]s should save for a [[Noble Armor|noble]] or [[Knight Armor|knight armor]]. [[Paladin]]s should buy a [[Belted Cape]] which has the same defense but is much lighter. This can also be gotten by [[Rust Remover|unrusting]] a [[Heavily Rusted Armor]], [[Rusted Armor]] or [[Slightly Rusted Armor]].\nCan be obtained in the [[Plate Armor Quest]].\n}}"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
