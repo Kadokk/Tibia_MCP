@@ -124,8 +124,8 @@ Plus a co-located `.test.ts` for every `src/` file above.
 
 Draft the inquiry email per the current fansite-programme rules at cipsoft.com/tibia (verify the current submission channel live): who we are, what TibiaEdge does (AI assistant Discord bot; TibiaWiki CC BY-SA-attributed data; no client interaction, no botting, no packet reading), the freemium model (~$4.99/mo), and the explicit question whether paid features around Tibia-derived public data are acceptable to the programme. Include a submission checklist (channel, date sent, response) the launch checklist will reference.
 
-- [ ] **Step 1:** Verify the current fansite-programme contact/submission mechanism on cipsoft.com (live).
-- [ ] **Step 2:** Write `docs/fansite-inquiry.md` (email body ≤ 400 words, EN; checklist section).
+- [x] **Step 1:** Verify the current fansite-programme contact/submission mechanism on cipsoft.com (live).
+- [x] **Step 2:** Write `docs/fansite-inquiry.md` (email body ≤ 400 words, EN; checklist section).
 - [ ] **Step 3:** Flag to the owner for send — the send itself is an owner action recorded in the checklist.
 
 **Exit:** doc exists; owner notified. **Commit:** `docs: CipSoft fansite-programme inquiry draft (Task 1)`
