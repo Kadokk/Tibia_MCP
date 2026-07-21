@@ -178,6 +178,8 @@ describe('WikiQuestImporter', () => {
     expect(request.model).toBe('qwen/qwen3.6-flash');
     expect(request.max_tokens).toBe(1024); // deliberately not env.aiMaxOutputTokens
     expect(request.tool_choice).toEqual({ type: 'function', function: { name: 'record_quest_steps' } });
+    // Qwen's thinking mode rejects a forced tool_choice outright.
+    expect(request.reasoning).toEqual({ enabled: false });
     expect(request.tools).toHaveLength(1);
     expect(request.tools[0].type).toBe('function');
     expect(request.tools[0].function.name).toBe('record_quest_steps');

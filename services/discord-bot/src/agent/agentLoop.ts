@@ -1,5 +1,5 @@
 import type OpenAI from 'openai';
-import type { ChatClient } from '../ai/client';
+import type { ChatClient, OpenRouterChatParams } from '../ai/client';
 import { costUsdMicros, type OpenRouterUsage } from '../ai/cost';
 import { SYSTEM_PROMPT } from './systemPrompt';
 import type { McpBridge, McpToolDef } from '../mcp/mcpClient';
@@ -86,8 +86,9 @@ export async function runAsk(deps: {
       model: deps.model,
       max_tokens: deps.maxOutputTokens,
       tools: deps.tools,
-      messages
-    });
+      messages,
+      reasoning: { enabled: false }
+    } as OpenRouterChatParams);
 
     const choice = response.choices?.[0];
     trace?.(`round ${rounds}: finish_reason=${choice?.finish_reason ?? 'none'} in ${Date.now() - roundStartedAt}ms`);

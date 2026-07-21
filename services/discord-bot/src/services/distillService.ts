@@ -1,5 +1,5 @@
 import type OpenAI from 'openai';
-import { describeAiError, type ChatClient } from '../ai/client';
+import { describeAiError, type ChatClient, type OpenRouterChatParams } from '../ai/client';
 import { costUsdMicros, type OpenRouterUsage } from '../ai/cost';
 import { sanitizeFact } from './factSanitizer';
 import { getTierLimits } from './tiers';
@@ -163,8 +163,9 @@ export class DistillService {
           { role: 'user', content: renderDistillInput(captures, facts) }
         ],
         tools: [DISTILL_TOOL],
-        tool_choice: { type: 'function', function: { name: 'apply_memory_ops' } }
-      });
+        tool_choice: { type: 'function', function: { name: 'apply_memory_ops' } },
+        reasoning: { enabled: false }
+      } as OpenRouterChatParams);
       await this.deps.usage.recordDistillUsage(userId, costUsdMicros(response.usage as OpenRouterUsage | undefined));
 
       await this.applyOps(userId, extractOps(response, userId), captureIds[0]);

@@ -6,6 +6,14 @@ import OpenAI from 'openai';
  */
 export type ChatClient = Pick<OpenAI, 'chat'>;
 
+/**
+ * Request params plus OpenRouter's `reasoning` extension, which the OpenAI SDK
+ * does not type. Qwen defaults to thinking mode, and thinking mode rejects a
+ * forced `tool_choice` outright ("does not support being set to required or
+ * object in thinking mode"), so every call disables it.
+ */
+export type OpenRouterChatParams = OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming & { reasoning?: { enabled: boolean } };
+
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 // Tuned to Discord's 15-minute editReply window: long enough for a slow round,
 // short enough that a hung request still leaves room for the retries below.

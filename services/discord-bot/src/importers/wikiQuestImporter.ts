@@ -1,5 +1,5 @@
 import type OpenAI from 'openai';
-import { describeAiError, type ChatClient } from '../ai/client';
+import { describeAiError, type ChatClient, type OpenRouterChatParams } from '../ai/client';
 import { costUsdMicros, type OpenRouterUsage } from '../ai/cost';
 import { parseInfoboxQuest, parseRequiredEquipment, questSlug } from './wikiParser';
 import type { QuestRepository } from '../repositories/questRepository';
@@ -261,8 +261,9 @@ export class WikiQuestImporter {
         { role: 'user', content: `Quest: ${title}\n\nMETHOD:\n${source.slice(0, 6000)}` }
       ],
       tools: [STEPS_TOOL],
-      tool_choice: { type: 'function', function: { name: 'record_quest_steps' } }
-    });
+      tool_choice: { type: 'function', function: { name: 'record_quest_steps' } },
+      reasoning: { enabled: false }
+    } as OpenRouterChatParams);
     const cost = costUsdMicros(response.usage as OpenRouterUsage | undefined);
     return { steps: extractSteps(response, title), cost };
   }

@@ -113,6 +113,20 @@ describe('runAsk', () => {
     expect(create.mock.calls[1][0].max_tokens).toBe(2048);
   });
 
+  // Qwen defaults to thinking mode, which rejects a forced tool_choice outright.
+  it('disables reasoning mode on every call', async () => {
+    const { ai, create } = fakeAi(
+      toolCallsResponse([{ id: 't1', name: 'search_wiki', args: '{}' }]),
+      textResponse('done')
+    );
+    const { mcp } = fakeMcp();
+
+    await runAsk({ ai, mcp, tools: toAiTools(toolDefs), ...baseDeps });
+
+    expect(create.mock.calls[0][0].reasoning).toEqual({ enabled: false });
+    expect(create.mock.calls[1][0].reasoning).toEqual({ enabled: false });
+  });
+
   it('sends exactly one system message, byte-identical to SYSTEM_PROMPT, when no userContext is given', async () => {
     const { ai, create } = fakeAi(textResponse('hi'));
     const { mcp } = fakeMcp();
