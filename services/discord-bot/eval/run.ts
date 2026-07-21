@@ -174,6 +174,18 @@ const EVAL_ITEM = {
   wiki_url: 'https://tibia.fandom.com/wiki/Magic_Plate_Armor', attribution: EVAL_ATTRIBUTION,
   source_revision: '1000001'
 };
+// Magic Sword is reachable only as "MSW" in the alias case, which is the point:
+// the curated alias seed is what turns the abbreviation into a row.
+const EVAL_MAGIC_SWORD = {
+  id: 6, slug: 'magic-sword', title: 'Magic Sword', game_item_id: 3288,
+  object_class: 'Weapons', primary_type: 'Swords', slot: 'Two-Handed', level_required: 80,
+  vocation: null, weight: '42.00', attack: 48, defense: 35, armor: null,
+  npc_buy_price: null, npc_sell_price: null, market_value_low: 100000, market_value_high: 100000,
+  marketable: true, stackable: false, pickupable: true, actual_name: 'magic sword',
+  plural: null, aliases: ['magic sword', 'msw'], attributes: {},
+  wiki_url: 'https://tibia.fandom.com/wiki/Magic_Sword', attribution: EVAL_ATTRIBUTION,
+  source_revision: '1000006'
+};
 const EVAL_CREATURE = {
   id: 2, slug: 'dragon', title: 'Dragon', hp: 1000, exp: 700, armor: 25, mitigation: '1.55',
   bestiary_class: 'Dragon', bestiary_level: 'Medium', occurrence: 'Common', is_boss: false,
@@ -220,7 +232,9 @@ function makeLocalCatalog(calls: string[]) {
     catalog: {
       findItemLoose: async (name: string) => {
         calls.push('get_item_info');
-        return matches(name, 'magic plate', 'mpa') ? EVAL_ITEM : null;
+        if (matches(name, 'magic plate', 'mpa')) return EVAL_ITEM;
+        if (matches(name, 'magic sword', 'msw')) return EVAL_MAGIC_SWORD;
+        return null;   // an unknown item is what makes the honest-miss case observable
       },
       findItems: async (f: { search?: string }) => {
         calls.push('find_items');
