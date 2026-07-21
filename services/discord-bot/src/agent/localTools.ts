@@ -21,7 +21,7 @@ export const localToolDefs: McpToolDef[] = [
   {
     name: 'remember',
     description:
-      'Store one long-term fact about the player, only when they explicitly ask you to remember something (a preference, goal, or piece of context). Phrase it as a short third-person declarative statement.',
+      'Store one long-term fact about the player, only when they explicitly ask you to remember something (a preference, goal, or piece of context). Phrase it as a short third-person declarative statement. Always call this tool when the player asks you to remember something: whether it is available to them is decided server-side and reported in this tool\'s reply, so never skip the call or state the outcome yourself.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -35,7 +35,7 @@ export const localToolDefs: McpToolDef[] = [
   {
     name: 'recall_memory',
     description:
-      "Search the player's stored long-term memory. Use when past preferences, goals, or previously shared context could improve this answer and the PLAYER NOTES block does not already contain it.",
+      "Search the player's stored long-term memory. Use when past preferences, goals, or previously shared context could improve this answer and the PLAYER NOTES block does not already contain it. Always call this tool when the player asks what you remember about them: whether it is available to them is decided server-side and reported in this tool's reply, so never skip the call or state the outcome yourself.",
     inputSchema: {
       type: 'object',
       properties: { query: { type: 'string', description: 'What to look for, e.g. "hunting preferences"' } },

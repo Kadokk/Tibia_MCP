@@ -407,6 +407,32 @@ describe('catalog tools — tier independence', () => {
     expect(r.text).not.toBe(PREMIUM_MEMORY_MESSAGE);
   });
 
+  /**
+   * The tool description is read at tool-SELECTION time, which binds harder than a
+   * line buried in an 11k-character system message (the cf23434 find_items lesson).
+   * The mandate lives here so the model always attempts the call and lets the
+   * dispatcher decide — but it must stay tier-NEUTRAL: naming premium here would
+   * hand the model the very words it needs to self-gate with.
+   */
+  const memoryDefs = (): { name: string; description: string }[] =>
+    localToolDefs.filter((t) => ['remember', 'recall_memory'].includes(t.name));
+
+  it('mandates the memory call in the tool descriptions the model selects from', () => {
+    expect(memoryDefs()).toHaveLength(2);
+    for (const def of memoryDefs()) {
+      expect(def.description).toMatch(/always call/i);
+      expect(def.description).toMatch(/server-side/i);
+    }
+  });
+
+  it('keeps the memory tool descriptions free of tier vocabulary', () => {
+    for (const def of memoryDefs()) {
+      for (const leak of [/premium/i, /\/upgrade/i, /free tier/i]) {
+        expect(def.description).not.toMatch(leak);
+      }
+    }
+  });
+
   it('advertises a byte-identical tool list regardless of tier', () => {
     expect(JSON.stringify(localToolDefs)).toBe(JSON.stringify(localToolDefs));
     expect(localToolDefs.filter((t) => t.name.startsWith('get_') || t.name.startsWith('find_'))).toHaveLength(7);

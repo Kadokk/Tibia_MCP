@@ -34,6 +34,28 @@ describe('SYSTEM_PROMPT — CATALOG rule', () => {
     expect(rule).toMatch(/attribution|CC BY-SA/i);
   });
 
+  /**
+   * Task 20 Step 2, attempt 2: both gating cases failed with the same shape —
+   * zero tools called, the model explaining the premium wall itself. Rule 7 named
+   * the gate ("If a memory tool replies that it is a premium feature, relay that
+   * briefly") but never mandated the call, so the model could satisfy it by
+   * asserting the gate from the prompt alone. That makes the MODEL the gatekeeper,
+   * violating the invariant that tier gating happens only inside dispatchers.
+   * The pre-call surface must carry no TibiaEdge tier vocabulary to preempt with.
+   */
+  const rule7 = (): string => /^7\. MEMORY:.*$/m.exec(SYSTEM_PROMPT)?.[0] ?? '';
+
+  it('mandates calling the memory tools instead of describing the gate', () => {
+    expect(rule7()).toMatch(/always (make the call|call)/i);
+    expect(rule7()).toMatch(/server-side|decided by the server/i);
+  });
+
+  it('leaks no TibiaEdge tier vocabulary into rule 7', () => {
+    for (const leak of [/premium feature/i, /\/upgrade/i, /free tier/i]) {
+      expect(rule7()).not.toMatch(leak);
+    }
+  });
+
   it('does not renumber or drop the existing rules', () => {
     for (const heading of ['1. GROUNDING:', '2. FRESHNESS:', '3. LANGUAGE:', '4. NO AUTOMATION HELP:',
       '5. CAUTIOUS CLAIMS:', '6. FORMAT:', '7. MEMORY:', '8. QUESTS:']) {
