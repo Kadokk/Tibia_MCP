@@ -37,6 +37,7 @@ const PLATE_ARMOR = wikitextOf('catalog_item.api.json');
 const FIRE = wikitextOf('catalog_object_nonitem.api.json');
 const DOLL = wikitextOf('catalog_object_edges.api.json', 'Doll');
 const SILVER_KEY = wikitextOf('catalog_object_edges.api.json', 'Silver Key');
+const NAGA_NEST = wikitextOf('catalog_object_edges.api.json', 'Naga Nest');
 const RUNE = wikitextOf('catalog_batch.api.json', 'Great Fireball Rune');
 const DEMON = wikitextOf('catalog_creature_demon.api.json', 'Demon');
 const BLACK_KNIGHT = wikitextOf('catalog_creature_demon.api.json', 'Black Knight');
@@ -723,5 +724,36 @@ describe('wiki links never reach stored values', () => {
       expect(serialized, 'no link markup').not.toContain('[[');
       expect(serialized, 'no closing link markup').not.toContain(']]');
     }
+  });
+});
+
+describe('itemid given as a list', () => {
+  /**
+   * Some pages list several client ids for one item. coerceInt strips commas to
+   * tolerate thousand separators, so an unspaced list like "39568,39569" became
+   * the single number 3956839569 — an id that exists in no game, and which only
+   * surfaced because it overflowed an int4 column on insert. A spaced list
+   * ("9018, 9019") happened to parse correctly, which is why this went unnoticed.
+   */
+  it('takes the first id from an unspaced comma list', () => {
+    expect(mapItem('Naga Nest', NAGA_NEST, null)?.gameItemId).toBe(39568);
+  });
+
+  it('still reads a single id', () => {
+    expect(mapItem('Plate Armor', PLATE_ARMOR, null)?.gameItemId).toBe(3357);
+    expect(mapItem('Doll', DOLL, null)?.gameItemId).toBe(2991);
+  });
+
+  it('never yields an id outside int4 range, which no real item id approaches', () => {
+    for (const [title, text] of [['Naga Nest', NAGA_NEST], ['Plate Armor', PLATE_ARMOR], ['Doll', DOLL], ['Silver Key', SILVER_KEY]] as const) {
+      const id = mapItem(title, text, null)?.gameItemId;
+      if (id !== null && id !== undefined) expect(id, `${title} id must fit int4`).toBeLessThan(2_147_483_647);
+    }
+  });
+
+  // Thousand separators must keep working: this is why coerceInt strips commas.
+  it('does not break comma-separated thousands elsewhere', () => {
+    expect(coerceInt('1,200')).toBe(1200);
+    expect(coerceInt('1,000,000')).toBe(1000000);
   });
 });

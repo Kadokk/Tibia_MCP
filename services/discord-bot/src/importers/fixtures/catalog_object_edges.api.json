@@ -37,6 +37,24 @@
             }
           }
         ]
+      },
+      {
+        "pageid": 98744,
+        "ns": 0,
+        "title": "Naga Nest",
+        "revisions": [
+          {
+            "revid": 1014047,
+            "parentid": 961880,
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "content": "{{Infobox Object|List={{{1|}}}|GetValue={{{GetValue|}}}\n| name          = Naga Nest\n| article       = a\n| actualname    = naga nest\n| itemid        = 39568,39569\n| objectclass   =  \n| primarytype   =  \n| flavortext    =  \n| implemented   = 12.90.12182\n| immobile      = no\n| walkable      = yes\n| blockspath    = no\n| pickupable    = yes\n| usable        = no\n| weight        = 10.00\n| stackable     = no\n| droppedby     = {{Dropped By|}}\n| value         = Negotiable\n| npcvalue      = 0\n| npcprice      = 0\n| buyfrom       = --\n| sellto        = --\n| notes         = Received as a reward during the [[Within the Tides Quest]].\n}}"
+              }
+            }
+          }
+        ]
       }
     ]
   }

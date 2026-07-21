@@ -525,7 +525,10 @@ export function mapItem(title: string, wikitext: string, revid: number | null): 
   return {
     slug: slugify(title),
     title,
-    gameItemId: coerceInt(get('itemid')),
+    // Some pages list several client ids for one item ("39568,39569"). coerceInt
+    // strips commas for thousand separators, which would fuse an unspaced list into
+    // one impossible number, so split the list before coercing and keep the first id.
+    gameItemId: coerceInt((get('itemid') ?? '').split(/[,;]/)[0]),
     objectClass: text('objectclass'),
     primaryType: text('primarytype'),
     slot: text('slot'),
