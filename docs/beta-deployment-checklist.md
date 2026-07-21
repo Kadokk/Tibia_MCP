@@ -286,3 +286,35 @@ injection) alongside level/world/goal personalization; the Spider Cult `/ask` an
 with corpus-grounded requirements (level 42 min / 45 rec — exact match to the imported
 quest row, not model prior), item checklist (shovel/rope), TibiaWiki link, and the
 CC BY-SA attribution line. Owner confirmed link + attribution rendered in Discord.
+
+## Phase 5 verification — live catalog import (Task 15)
+
+**Full `--force` import (2026-07-21, local smoke DB `tibiaedge_smoke`, Brain-run):**
+all five content types imported by the zero-LLM batched pipeline in one run,
+~35 min wall-clock, zero model calls, politeness throttle held.
+
+| Type | Enumerated | Imported | Skipped (not this type) | Failed |
+|---|---|---|---|---|
+| items (objects) | 9,972 | **6,564** | 3,407 | 1 (Naga Nest, see below) |
+| creatures | 2,843 | **2,193** | 650 | 0 |
+| spells | 218 | **218** | 0 | 0 |
+| NPCs | 1,455 | **1,245** | 210 | 0 |
+| hunting places | 443 | **443** | 0 | 0 |
+| NPC trade offers | — | **11,837** | — | — |
+
+- **Exit-criteria recalibration (Brain ruling, ledgered in the plan):** the plan's
+  creature/NPC floors (≥2,800 / ≥1,400) were set from raw transclusion counts before
+  the indirect-transclusion superset effect was quantified (Tasks 5–6). Skipped pages
+  sample-verified live: 193 of the first 500 creature transclusions are city/dungeon
+  pages (Rookgaard, Carlin, Hero Cave…), not creatures. Imported counts are
+  correct-by-construction; recalibrated floors: creatures ≥ 2,100, NPCs ≥ 1,200.
+- **Spot checks all ✅:** Magic Sword aliases `["magic sword","msw"]`, npc_sell 350;
+  Demon fire resistance 0% + 18 spawn locations; Rashid city=Svargrond, no markup;
+  Ab'Dendriel Elf Cave lvlknights 20 / lvlmages 25 + exact creature list.
+- **Markup-leak sweep ✅:** zero `{{` occurrences across all catalog tables.
+- **Incremental re-run proof ✅:** immediate second run → `updated 0` on every type
+  (revid gate); failed page correctly retries (revid not stored on failure).
+- **Known defect (open, interstitial fix directed):** item "Naga Nest" fails with
+  integer overflow (wiki value 3,956,839,569 > int4); retry left a PARTIAL row while
+  reporting failed=1 → fix is BIGINT column width + per-page atomicity (no partial
+  rows on failure), then targeted item re-import. Counts above exclude the partial row.
