@@ -376,3 +376,42 @@ describe('CatalogRepository — counts', () => {
     expect((await repo(db).counts()).item).toBe(0);
   });
 });
+
+describe('CatalogRepository — mergeItemAliases', () => {
+  it('unions seed aliases into the stored array in a single statement', async () => {
+    const db = fakeDb([]);
+    await repo(db).mergeItemAliases('Magic Sword', ['msw', 'magic sword']);
+
+    expect(db.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('UPDATE catalog_items');
+    expect(sql).toContain('jsonb_array_elements_text');
+    expect(sql).toContain('UNION');
+    expect(sql).toContain('lower(title) = lower($1)');
+    expect(params).toEqual(['Magic Sword', ['msw', 'magic sword']]);
+  });
+
+  // A re-import must never replace curated aliases with the seed's view of them.
+  it('never overwrites, only adds', async () => {
+    const db = fakeDb([]);
+    await repo(db).mergeItemAliases('Magic Sword', ['msw']);
+
+    const sql = db.query.mock.calls[0][0] as string;
+    expect(sql).not.toMatch(/SET\s+aliases\s*=\s*\$/);
+    expect(sql).toContain('COALESCE'); // an empty union must not null out a NOT NULL column
+  });
+
+  it('lowercases incoming aliases so casing cannot duplicate an entry', async () => {
+    const db = fakeDb([]);
+    await repo(db).mergeItemAliases('Magic Sword', ['MSW']);
+
+    expect(db.query.mock.calls[0][0]).toContain('lower(');
+  });
+
+  it('issues no query when there are no aliases to merge', async () => {
+    const db = fakeDb([]);
+    await repo(db).mergeItemAliases('Magic Sword', []);
+
+    expect(db.query).not.toHaveBeenCalled();
+  });
+});

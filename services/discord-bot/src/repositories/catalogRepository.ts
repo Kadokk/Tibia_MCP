@@ -256,6 +256,31 @@ export class CatalogRepository {
       [itemId, json(payload)]);
   }
 
+  /**
+   * Folds curated aliases into an item's stored array.
+   *
+   * A union in SQL rather than a read-modify-write: the seed must add to whatever
+   * an item already carries, never replace it, and doing it in one statement
+   * removes the race between reading the old array and writing the new one.
+   * COALESCE guards the NOT NULL column against an empty union.
+   */
+  async mergeItemAliases(title: string, aliases: string[]): Promise<void> {
+    if (aliases.length === 0) return;
+    await this.db.query(
+      `UPDATE catalog_items
+       SET aliases = COALESCE((
+             SELECT jsonb_agg(DISTINCT a ORDER BY a)
+             FROM (
+               SELECT jsonb_array_elements_text(aliases) AS a
+               UNION
+               SELECT lower(x) FROM unnest($2::text[]) AS x
+             ) merged
+           ), '[]'::jsonb),
+           updated_at = now()
+       WHERE lower(title) = lower($1)`,
+      [title, aliases]);
+  }
+
   /** Loose single-item resolution: exact title, then actual name, then alias, then contains. */
   async findItemLoose(name: string): Promise<CatalogItemRow | null> {
     const rows = await this.db.query<CatalogItemRow>(
