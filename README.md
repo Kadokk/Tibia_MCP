@@ -15,7 +15,7 @@ MCP data server. Freemium SaaS direction. All data comes from public, ToS-legal 
 | Component | Path | Status | Notes |
 |---|---|---|---|
 | **Data MCP** (`tibia-mcp`) | `src/` | ✅ Working, tested | 14 read-only tools over stdio JSON-RPC; TibiaData API + TibiaWiki/Bazaar scraping (incl. NPC buy/sell prices, `refresh_bazaar_history` + `valuate_auction` for ended-auction comparables); SQLite cache (WAL, per-tool TTLs, stale fallback). 58 tests. |
-| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | ✅ v1 code-complete | 13 slash commands (12 fully wired; `/setup` still a placeholder). `/ask` agent loop on Claude Haiku 4.5 with prompt caching and a daily spend circuit breaker; second-brain memory (capture → distill → recall); quest companion with a TibiaWiki quest importer; 4 background schedulers; Postgres with 4 auto-applied migrations. 300 vitest tests; 12/12 golden-set eval. Live smoke tests pending first deploy. |
+| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | ✅ v1 code-complete | 13 slash commands (12 fully wired; `/setup` still a placeholder). `/ask` agent loop over OpenRouter (model configurable via `AI_MODEL`) with a daily spend circuit breaker; second-brain memory (capture → distill → recall); quest companion with a TibiaWiki quest importer; 4 background schedulers; Postgres with 4 auto-applied migrations. 336 vitest tests; 20/20 golden-set eval. Live smoke tests pending first deploy. |
 | **Protocol library / trade listener / parser** | archived | 📦 Archived (git tag `archive/live-listener`) | Packet reading is permanently out of scope — see the [assistant design spec](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md). |
 
 Legend: ✅ working · ⚠️ partial · 🚧 scaffolding · ⛔ blocked · 📦 archived.
@@ -24,7 +24,7 @@ Legend: ✅ working · ⚠️ partial · 🚧 scaffolding · ⛔ blocked · 📦
 
 - **`/ask`** — the AI assistant: an agent loop over the 14 MCP data tools plus local memory
   tools, personalized from linked characters, distilled memories, goals, and tracked quests.
-  Tiered quotas, per-day spend cap, prompt caching.
+  Tiered quotas, per-day spend cap.
 - **`/link` · `/profile`** — link Tibia characters (verified via a code in the character
   comment on tibia.com), background profile sync, auction-seeded quest progress (`/link seed`).
 - **`/memory` · `/goals` · `/settings`** — the second brain: distilled facts with
@@ -42,7 +42,7 @@ Discord
    |
    v
 TibiaEdge bot (Node/tsx, services/discord-bot)
-   |-- agent loop: Claude Haiku 4.5 (prompt caching, spend circuit breaker)
+   |-- agent loop: OpenRouter (model via AI_MODEL, spend circuit breaker)
    |-- Postgres: users/tiers, memory, quests (db/migrations, auto-applied on boot)
    |-- schedulers: profile sync · memory distill · quest import · cache refresh
    |
@@ -80,8 +80,8 @@ Requires Node ≥ 18 (ESM; Node 22 in the Docker image). From `services/discord-
 ```bash
 npm ci
 npm run typecheck
-npm test                 # vitest — 300 tests
-npm run eval             # 12-case golden-set eval; needs ANTHROPIC_API_KEY (~$0.07/run)
+npm test                 # vitest — 336 tests
+npm run eval             # 20-case golden-set eval; needs OPENROUTER_API_KEY (~$0.02-0.05/run)
 npm run import:quests    # full TibiaWiki quest import; needs DATABASE_URL
 ```
 
@@ -102,7 +102,7 @@ Full runbook — VPS sizing, `.env` reference, backups, the spend-cap knob — i
 
 All config lives in `.env` at the repo root (gitignored — **never commit it**). The full
 variable table is in [`docs/deploy.md`](docs/deploy.md) §4; the essentials are `DISCORD_TOKEN`,
-`DISCORD_CLIENT_ID`, `POSTGRES_PASSWORD`, `ANTHROPIC_API_KEY`, and the
+`DISCORD_CLIENT_ID`, `POSTGRES_PASSWORD`, `OPENROUTER_API_KEY`, and the
 `AI_DAILY_SPEND_CAP_USD` circuit breaker. The C++ server itself reads only
 `TIBIA_MCP_LOG_LEVEL` (`DEBUG`/`INFO`/`WARN`/`ERROR`).
 

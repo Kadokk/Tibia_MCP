@@ -2,7 +2,7 @@
 
 How to run the TibiaEdge Discord bot and its bundled C++ MCP server in production
 with Docker Compose. Phase 1 has no public HTTP surface — the bot only makes
-outbound connections (Discord, the Anthropic API, TibiaData, the wiki), so no
+outbound connections (Discord, the OpenRouter API, TibiaData, the wiki), so no
 reverse proxy or inbound ports are required.
 
 The Compose stack is two services:
@@ -84,11 +84,12 @@ committed.
 | `DATABASE_URL` | see note | Postgres connection string. **Under Compose you can leave the template value as-is** — the compose file overrides `DATABASE_URL` to `postgres://tibiaedge:${POSTGRES_PASSWORD}@db:5432/tibiaedge` automatically. This line only matters for local, non-Docker development. |
 | `POSTGRES_PASSWORD` | yes | Password for the bundled Postgres. Compose uses it to initialize the `db` container **and** to build the bot's `DATABASE_URL` override. Pick a strong value, e.g. `openssl rand -hex 24`. |
 | `NODE_ENV` | optional | `development`, `test`, or `production`. Not read for runtime behavior, but set it to `production` on a deploy for accuracy. (The image already defaults to `production`; a value here overrides that, so if you copied the template, change `development` → `production`.) |
-| `ANTHROPIC_API_KEY` | yes | Anthropic API key for the `/ask` agent. |
-| `ANTHROPIC_MODEL` | optional | Model id for the agent. Defaults to `claude-haiku-4-5`. |
+| `OPENROUTER_API_KEY` | yes | OpenRouter API key for the `/ask` agent, memory distillation, and the quest importer. The bot exits at boot naming this variable if it is absent. |
+| `AI_MODEL` | optional | Model id for every AI path. Defaults to `qwen/qwen3.6-flash`; set `anthropic/claude-haiku-4.5` to A/B. |
+| `AI_MAX_OUTPUT_TOKENS` | optional | Output-token ceiling for the `/ask` loop. Defaults to `4096`. |
 | `MCP_SERVER_COMMAND` | **leave UNSET for Docker** | Do not put this in `.env` under Docker: `env_file` overrides the image ENV, whose default `/app/bin/tibia-mcp-impersonate` carries the curl-impersonate wrapper (tibia.com TLS-fingerprint 403 fix). Setting `/app/bin/tibia-mcp` here silently bypasses the wrapper and re-breaks bazaar tools (found live 2026-07-20). |
 | `MCP_SERVER_CWD` | leave as-is | Working directory for the MCP server's SQLite cache. `/app/data` maps to the `mcp-cache` volume — don't change it for Docker. |
-| `AI_DAILY_SPEND_CAP_USD` | optional | Daily Anthropic spend circuit breaker (see §8). Defaults to `0.7`. |
+| `AI_DAILY_SPEND_CAP_USD` | optional | Daily AI spend circuit breaker (see §8). Defaults to `0.7`. |
 | `TIBIADATA_BASE_URL` | optional | TibiaData API base URL. Defaults to `https://api.tibiadata.com`. |
 
 > Note: `env_file` injects the whole `.env` into the bot container, including
@@ -178,7 +179,7 @@ docker compose exec -T db psql -U tibiaedge tibiaedge < backup-YYYY-MM-DD.sql
 
 ## 8. Spend-cap knob (`AI_DAILY_SPEND_CAP_USD`)
 
-`AI_DAILY_SPEND_CAP_USD` is the daily Anthropic-spend circuit breaker for `/ask`.
+`AI_DAILY_SPEND_CAP_USD` is the daily AI-spend circuit breaker for `/ask`.
 When the day's estimated spend crosses this cap, the bot stops answering free-tier
 `/ask` questions and returns a "free capacity used up" message until the next day.
 It defaults to `0.7` (USD/day). Raise or lower it in `.env` and apply with:
