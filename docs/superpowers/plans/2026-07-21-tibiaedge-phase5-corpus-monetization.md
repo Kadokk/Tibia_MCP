@@ -231,7 +231,7 @@ Per content type (`item|creature|spell|npc|hunt`): enumerate via `wikiApiClient`
 
 `npm run import:catalog -- [--type item|creature|spell|npc|hunt] [--limit N]` (Phase 4 CLI conventions: dummy Discord/MCP env vars documented in the file header). Weekly scheduler on the quest-scheduler template — note that template kicks at boot and resets its timer every restart, so a "+24 h first tick" would never fire on a frequently-deployed bot; instead kick at boot like the quest scheduler but with a fixed ~10-minute initial delay (staggers the two importers' fetch windows; post-first-import a boot kick is nearly free thanks to the revid gate). Env: `CATALOG_IMPORT_TICK_MS` default 604 800 000, `CATALOG_IMPORT_ENABLED` default true — **safe defaults, no VPS `.env` change needed**.
 
-- [ ] **Step 1:** Failing tests: env parsing/defaults; scheduler tick calls importer; CLI arg handling. **Step 2:** Implement + wire in `main.ts`. **Step 3:** Gates green.
+- [x] **Step 1:** Failing tests: env parsing/defaults; scheduler tick calls importer; CLI arg handling. **Step 2:** Implement + wire in `main.ts`. **Step 3:** Gates green.
 
 **Exit:** `npm run import:catalog -- --type spell --limit 3` runs live against the smoke DB (3 spells land). **Commit:** `feat(importers): catalog CLI + weekly scheduler + env knobs (Task 11)`
 
