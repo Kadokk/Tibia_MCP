@@ -2,15 +2,14 @@ import type OpenAI from 'openai';
 import { describeAiError, type ChatClient, type OpenRouterChatParams } from '../ai/client';
 import { costUsdMicros, type OpenRouterUsage } from '../ai/cost';
 import { parseInfoboxQuest, parseRequiredEquipment, questSlug } from './wikiParser';
+import { WikiApiClient, type WikiHttp } from './wikiApiClient';
 import type { QuestRepository } from '../repositories/questRepository';
 import type { WikiImportRunRepository } from '../repositories/wikiImportRunRepository';
 import type { UsageRepository } from '../repositories/usageRepository';
 
-export const WIKI_API = 'https://tibia.fandom.com/api.php';
-export const WIKI_USER_AGENT = 'TibiaEdgeBot/2.0 (Discord quest companion; contact: elweydelcalzado@gmail.com)';
-const THROTTLE_MS = 2000;
-const REVID_BATCH = 50;
-const RETRY_BACKOFFS_MS = [5000, 15000, 45000]; // 3 retries after the initial attempt
+// Re-exported so existing callers keep importing these from the quest importer.
+export { WIKI_API, WIKI_USER_AGENT, type WikiHttp } from './wikiApiClient';
+
 const STEPS_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
@@ -27,18 +26,6 @@ const STEPS_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 const STEPS_SYSTEM = 'You summarize Tibia quest walkthroughs. Rewrite the METHOD text into 3-10 short step gists in your own words. Never copy phrases longer than a few words from the source; the source is CC BY-SA and our summary must be an original expression. Facts (NPC names, places, item names, level numbers) stay exact.';
-
-export type WikiHttp = { getJson(url: string): Promise<unknown> };
-
-type MediaWikiPage = {
-  title: string;
-  missing?: boolean;
-  revisions?: Array<{ revid?: number; slots?: { main?: { content?: string } } }>;
-};
-type QueryResponse = {
-  query?: { categorymembers?: Array<{ ns: number; title: string }>; pages?: MediaWikiPage[] };
-  continue?: { cmcontinue?: string };
-};
 
 /** Extract the wikitext under an "== <heading> ==" section up to the next LEVEL-2
  *  heading. The terminator excludes "===" (level-3 subheadings) via negative
@@ -87,6 +74,10 @@ function extractSteps(response: OpenAI.Chat.Completions.ChatCompletion, title: s
 }
 
 export class WikiQuestImporter {
+  /** Built from the injected http/sleep deps rather than injected itself, so callers
+   *  (and this importer's tests) keep the same constructor surface. */
+  private readonly wiki: WikiApiClient;
+
   constructor(private readonly deps: {
     http: WikiHttp;
     ai: ChatClient;
@@ -96,7 +87,9 @@ export class WikiQuestImporter {
     sleep: (ms: number) => Promise<void>;
     model: string;
     spendCapUsdMicros: number;
-  }) {}
+  }) {
+    this.wiki = new WikiApiClient({ http: deps.http, sleep: deps.sleep });
+  }
 
   async run(opts?: { limit?: number }): Promise<void> {
     const runId = await this.deps.runs.start();
@@ -140,22 +133,6 @@ export class WikiQuestImporter {
     }
   }
 
-  /** Throttle before every request; retry 3× with exponential backoff on thrown errors. */
-  private async fetchApi(params: Record<string, string>): Promise<QueryResponse> {
-    const url = `${WIKI_API}?${new URLSearchParams({ ...params, format: 'json', formatversion: '2' }).toString()}`;
-    let lastErr: unknown;
-    for (let attempt = 0; attempt <= RETRY_BACKOFFS_MS.length; attempt++) {
-      await this.deps.sleep(THROTTLE_MS);
-      try {
-        return (await this.deps.http.getJson(url)) as QueryResponse;
-      } catch (err) {
-        lastErr = err;
-        if (attempt < RETRY_BACKOFFS_MS.length) await this.deps.sleep(RETRY_BACKOFFS_MS[attempt]);
-      }
-    }
-    throw lastErr;
-  }
-
   private async enumerate(): Promise<string[]> {
     const titles: string[] = [];
     let cmcontinue: string | undefined;
@@ -165,7 +142,7 @@ export class WikiQuestImporter {
         cmtitle: 'Category:Quest_Overview_Pages', cmlimit: '500'
       };
       if (cmcontinue) params.cmcontinue = cmcontinue;
-      const resp = await this.fetchApi(params);
+      const resp = await this.wiki.fetchApi(params);
       for (const m of resp.query?.categorymembers ?? []) {
         if (m.ns === 0) titles.push(m.title);
       }
@@ -174,28 +151,12 @@ export class WikiQuestImporter {
     return titles;
   }
 
-  private async fetchRevids(titles: string[]): Promise<Map<string, number>> {
-    const map = new Map<string, number>();
-    for (let i = 0; i < titles.length; i += REVID_BATCH) {
-      const batch = titles.slice(i, i + REVID_BATCH);
-      const resp = await this.fetchApi({
-        action: 'query', prop: 'revisions', rvprop: 'ids', titles: batch.join('|')
-      });
-      for (const p of resp.query?.pages ?? []) {
-        const revid = p.revisions?.[0]?.revid;
-        if (typeof revid === 'number') map.set(p.title, revid);
-      }
-    }
-    return map;
+  private fetchRevids(titles: string[]): Promise<Map<string, number>> {
+    return this.wiki.fetchRevids(titles);
   }
 
-  private async fetchContent(title: string): Promise<string | null> {
-    const resp = await this.fetchApi({
-      action: 'query', prop: 'revisions', rvprop: 'content|ids', rvslots: 'main', titles: title
-    });
-    const page = resp.query?.pages?.[0];
-    if (!page || page.missing) return null;
-    return page.revisions?.[0]?.slots?.main?.content ?? '';
+  private fetchContent(title: string): Promise<string | null> {
+    return this.wiki.fetchPageContent(title);
   }
 
   private async processPage(title: string, revid: number): Promise<{ capped: boolean; cost: number }> {
