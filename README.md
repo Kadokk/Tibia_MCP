@@ -15,7 +15,7 @@ MCP data server. Freemium SaaS direction. All data comes from public, ToS-legal 
 | Component | Path | Status | Notes |
 |---|---|---|---|
 | **Data MCP** (`tibia-mcp`) | `src/` | ✅ Working, tested | 14 read-only tools over stdio JSON-RPC; TibiaData API + TibiaWiki/Bazaar scraping (incl. NPC buy/sell prices, `refresh_bazaar_history` + `valuate_auction` for ended-auction comparables); SQLite cache (WAL, per-tool TTLs, stale fallback). 58 tests. |
-| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | ✅ Phase 5 code-complete | 14 slash commands (13 fully wired; `/setup` still a placeholder). `/ask` agent loop over OpenRouter (model configurable via `AI_MODEL`, default `anthropic/claude-haiku-4.5`) with a daily spend circuit breaker; second-brain memory (capture → distill → recall); quest companion; a TibiaWiki catalog of items, creatures, spells, NPCs and hunting places behind six SQL-backed tools; Stripe-backed premium tiers via outbound polling; 6 background schedulers; Postgres with 6 auto-applied migrations. 697 vitest tests; 29-case golden eval. |
+| **Discord bot** (`TibiaEdge`) | `services/discord-bot/` | ✅ Phase 5 code-complete | 14 slash commands (13 fully wired; `/setup` still a placeholder). `/ask` agent loop over OpenRouter (model configurable via `AI_MODEL`, default `anthropic/claude-haiku-4.5`) with a daily spend circuit breaker; second-brain memory (capture → distill → recall); quest companion; a TibiaWiki catalog of items, creatures, spells, NPCs and hunting places behind six SQL-backed tools; Stripe-backed premium tiers via outbound polling; 6 background schedulers; Postgres with 6 auto-applied migrations. 707 vitest tests; 29-case golden eval (two-run gate green). |
 | **Protocol library / trade listener / parser** | archived | 📦 Archived (git tag `archive/live-listener`) | Packet reading is permanently out of scope — see the [assistant design spec](docs/superpowers/specs/2026-07-14-tibiaedge-ai-assistant-design.md). |
 
 Legend: ✅ working · ⚠️ partial · 🚧 scaffolding · ⛔ blocked · 📦 archived.
@@ -80,8 +80,8 @@ Requires Node ≥ 18 (ESM; Node 22 in the Docker image). From `services/discord-
 ```bash
 npm ci
 npm run typecheck
-npm test                 # vitest — 336 tests
-npm run eval             # 20-case golden-set eval; needs OPENROUTER_API_KEY (~$0.02-0.05/run)
+npx vitest run           # 707 tests (never plain `npm test` — parks in watch mode)
+npm run eval             # 29-case golden-set eval; needs OPENROUTER_API_KEY (~$0.02-0.05/run)
 npm run import:quests    # full TibiaWiki quest import; needs DATABASE_URL
 ```
 

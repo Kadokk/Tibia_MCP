@@ -323,8 +323,8 @@ all five content types imported by the zero-LLM batched pipeline in one run,
 
 ## Phase 5 sign-off (corpus grounding + monetization)
 
-Recorded 2026-07-21 on `feat/v2-phase5-corpus-monetization`. Steps 1 and 3 of Task 20;
-Step 2 (live golden eval) and Step 4 (push/merge approval) are tracked separately below.
+Recorded 2026-07-21 on `feat/v2-phase5-corpus-monetization`. Task 20 Steps 1–3 are
+complete; Step 4 (push/PR approval, then merge approval) is the untouched human gate.
 
 ### What shipped
 
@@ -340,11 +340,21 @@ Step 2 (live golden eval) and Step 4 (push/merge approval) are tracked separatel
 
 ### Gate evidence
 
-- **Step 1 — ✅** `npx vitest run` 697 tests / 67 files green; `tsc --noEmit` green (now
+- **Step 1 — ✅** `npx vitest run` 707 tests / 67 files green; `tsc --noEmit` green (now
   covering `eval/` too, via `tsconfig.check.json`); `eslint src` green.
-- **Step 2 — ⏳ pending (Brain).** Live golden eval on `anthropic/claude-haiku-4.5`. Last
-  recorded run: **28/28 clean**; the suite has since grown to 29 cases with the Task 18
-  gating case, so a fresh run is required before this can be ticked.
+- **Step 2 — ✅ COMPLETE.** Live golden eval (29 cases) on `anthropic/claude-haiku-4.5`,
+  gated under an owner-approved **two-run methodology**: a case failing only one of two
+  runs drains as noise (legitimate LLM sampling variance), a case failing both is a real
+  repeat failure that blocks. Final pair: run 1 fails `{en-catalog-hunt-1}`, run 2 fails
+  `{pt-knowledge-1, en-gating-1, en-gating-2}` — intersection **empty**, every case passed
+  at least once. Getting here took a genuine debugging arc: the `qwen/qwen3.6-flash`
+  default was replaced with `anthropic/claude-haiku-4.5` (owner-approved, Qwen's failures
+  were real variance, not fixable via prompting); a real `find_items` production bug was
+  found and fixed; two rounds of prompt escape-hatch audits closed a memory-gating
+  self-answer bug (`c7a46b9`, `9b64231`); and `en-catalog-find-items-1`'s residual
+  ~1-in-5 ask-first behavior was resolved by splitting a hard grounding guarantee
+  (never state item facts without the catalog) from an unenforced flow preference,
+  ticketed for Phase 6. Full narrative in the plan's Ledger section.
 - **Step 3 — ✅** version `0.1.0 → 0.3.0`, README roadmap, this block.
 - **Step 4 — ⏳ human gate.** Push/PR approval, then merge approval. Untouched.
 
