@@ -72,10 +72,13 @@ Notes for whoever runs this:
   dropped it while relaying — check the raw tool output before blaming the model.
 - **"Not in the catalog" replies carry no attribution, and that is correct** — nothing was
   relayed. Do not file that as a failure.
-- **Row 8 is the known odd one out.** `/price` still calls the C++ `search_item` tool rather
-  than the catalog (deliberate for this phase; the ledgered follow-up moves it to catalog
-  aliases in Phase 6). Confirm what it actually emits and record the finding; if it relays
-  wiki-derived data without attribution, that is a real gap to fix before promotion.
+- **Row 8 is a CONFIRMED GAP — verified 2026-07-21, no need to re-test.** `/price` calls the
+  C++ `search_item` tool, which returns no attribution at all: no "TibiaWiki", no "CC BY-SA",
+  no `tibia.fandom.com` link. `priceCommand.ts` relays that text verbatim and adds nothing.
+  The data is plainly wiki-derived — item stats and per-NPC prices in the wiki's own
+  `sellto` grammar — so this is a licence-compliance gap on a user-facing command, not a
+  cosmetic one. Verify the other seven rows normally; row 8 is already answered. See the
+  gaps table below for the decision this needs.
 - Attribution obligations survive translation: rule 9 requires the notice and link even when
   the answer is in Portuguese, Spanish or Polish. Spot-check at least one non-English reply.
 
@@ -211,7 +214,21 @@ friendly testers cannot supply them.
 | CipSoft inquiry not sent | Gate 1 open; **no marketing** | Send, then record date/channel in `fansite-inquiry.md` |
 | No isolation eval case | Gate 3 rests on the manual drill for end-to-end proof | Ticket: add an isolation case to the golden eval |
 | Payments mechanism undecided (Task 16) | Blocks Tasks 17–18, not this checklist | Owner decision, relayed per the approval-integrity rule |
-| `/price` still on the C++ `search_item` | Attribution row 8 may be a real gap | Verify in Gate 2; Phase 6 moves it to catalog aliases |
+| `/price` emits no CC BY-SA attribution (**confirmed** 2026-07-21) | Licence gap on a user-facing command; undercuts the Gate 1 good-faith story | Owner decision before promotion — see note below |
+
+**On the `/price` attribution gap.** Moving `/price` onto the catalog is Phase 6 scope and
+should stay there — that is the right fix and it is not urgent work. But the *licence
+obligation* is live as soon as strangers use the command, which is before Phase 6. Three
+options, cheapest first:
+
+1. **Append the notice in `priceCommand.ts`** — one line, since the command already owns the
+   response text. Does not touch the C++ tool or pre-empt the Phase 6 migration.
+2. **Accept until Phase 6** — defensible only if `/price` stays behind the friendly-tester
+   boundary until then.
+3. **Disable `/price`** until the catalog migration lands.
+
+This is a judgement call about licence risk versus scope discipline, so it is recorded here
+rather than decided. It does not block merge either way.
 
 ---
 
