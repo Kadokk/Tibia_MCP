@@ -98,7 +98,7 @@ describe('parseEnv', () => {
   it('defaults AI_MODEL and AI_MAX_OUTPUT_TOKENS', () => {
     const env = parseEnv(inlineValidEnvObject);
 
-    expect(env.aiModel).toBe('qwen/qwen3.6-flash');
+    expect(env.aiModel).toBe('anthropic/claude-haiku-4.5');
     expect(env.aiMaxOutputTokens).toBe(4096);
     expect(typeof env.aiMaxOutputTokens).toBe('number');
   });

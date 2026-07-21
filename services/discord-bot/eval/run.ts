@@ -18,6 +18,7 @@ import { runAsk, toAiTools } from '../src/agent/agentLoop';
 import { buildLoopToolDefs, createToolRouter, type LocalToolDeps } from '../src/agent/localTools';
 import { PlayerContextService } from '../src/services/playerContextService';
 import { connectMcp, type McpToolResult } from '../src/mcp/mcpClient';
+import { DEFAULT_AI_MODEL } from '../src/config/env';
 
 type GoldenCase = {
   id: string;
@@ -374,7 +375,7 @@ async function main(): Promise<void> {
   // Bound every request. The SDK default is a 10-minute timeout retried twice (~30 min
   // worst case) — that unbounded wait is how a stalled completion silently hung the eval.
   const ai = createAiClient(process.env.OPENROUTER_API_KEY, { timeout: 30_000 });
-  const model = process.env.AI_MODEL ?? 'qwen/qwen3.6-flash';
+  const model = process.env.AI_MODEL ?? DEFAULT_AI_MODEL;
   const maxOutputTokens = Number(process.env.AI_MAX_OUTPUT_TOKENS ?? 4096);
   const fixtureBridge = makeFixtureBridge();
   const results: CaseResult[] = [];

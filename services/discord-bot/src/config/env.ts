@@ -2,6 +2,14 @@ import { z } from 'zod';
 
 const snowflakeSchema = z.string().trim().regex(/^\d{17,20}$/, 'must be a Discord snowflake');
 
+/**
+ * Default model for the agent loop and the distiller. Exported so the eval
+ * harness can fall back to the same value instead of hardcoding its own: a
+ * divergence there means an eval run silently grades a different model than
+ * production ships with.
+ */
+export const DEFAULT_AI_MODEL = 'anthropic/claude-haiku-4.5';
+
 const envSchema = z.object({
   DISCORD_TOKEN: z.string().trim().min(1),
   DISCORD_CLIENT_ID: snowflakeSchema,
@@ -9,7 +17,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().trim().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   OPENROUTER_API_KEY: z.string().trim().min(1),
-  AI_MODEL: z.string().trim().default('qwen/qwen3.6-flash'),
+  AI_MODEL: z.string().trim().default(DEFAULT_AI_MODEL),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
   MCP_SERVER_COMMAND: z.string().trim().min(1),          // path to tibia-mcp binary
   MCP_SERVER_CWD: z.string().trim().optional(),          // where its sqlite cache lives

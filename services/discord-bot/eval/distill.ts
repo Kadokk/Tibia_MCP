@@ -10,6 +10,7 @@
 import 'dotenv/config';
 import { createAiClient } from '../src/ai/client';
 import { DistillService } from '../src/services/distillService';
+import { DEFAULT_AI_MODEL } from '../src/config/env';
 
 // Explicit guard, not just a missing-key crash: the OpenAI SDK falls back to
 // OPENAI_API_KEY from the environment, so without this a stray key would send
@@ -48,7 +49,7 @@ const svc = new DistillService({
   links: { listForUser: async () => [] as never },
   tiers: { getTier: async () => 'pro' as const },
   usage: { recordDistillUsage: async (_u: string, c: number) => { costMicros += c; }, globalSpendTodayUsdMicros: async () => 0 },
-  model: process.env.AI_MODEL ?? 'qwen/qwen3.6-flash',
+  model: process.env.AI_MODEL ?? DEFAULT_AI_MODEL,
   spendCapUsdMicros: 700_000
 } as never);
 
