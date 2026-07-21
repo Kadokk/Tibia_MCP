@@ -261,7 +261,7 @@ System prompt gains rule 9, named **CATALOG** (rule 1 is already named GROUNDING
 
 6–8 new cases (20 → 26–28): item stat lookup by alias ("what does an MSW do"), best-gear query (`find_items`), creature loot + resistances ("what's immune to fire"), spell by incantation, NPC trade ("who buys plate armor and for how much"), hunting recommendation for a linked char's level/vocation (asserts a catalog place name, not a model-prior name), one negative case (obscure thing not in catalog → honest fallback). Content-word langMarkers only (Phase 3 lesson — function-word markers flake).
 
-- [ ] **Step 1:** Add cases; run the eval against fakes locally (no live key needed for structure). **Step 2:** [BRAIN] Live run: `npm run eval` with the dev OpenRouter key — target green; soft warns triaged.
+- [x] **Step 1:** Add cases; run the eval against fakes locally (no live key needed for structure). **Step 2:** [BRAIN] Live run: `npm run eval` with the dev OpenRouter key — target green; soft warns triaged.
 
 **Exit:** live eval ≥ 26 cases green on `qwen/qwen3.6-flash`. **Commit:** `test(eval): 6-8 catalog grounding cases (Task 14)`
 
