@@ -5,7 +5,7 @@ import type { QuestRepository, QuestRow } from '../repositories/questRepository'
 import type { QuestEligibilityService } from '../services/questEligibilityService';
 import type {
   CatalogCreatureRow, CatalogHuntRow, CatalogItemRow, CatalogNpcRow,
-  CatalogRepository, CatalogSpellRow
+  CatalogNpcTradeRow, CatalogRepository, CatalogSpellRow, CatalogTradeOfferRow
 } from '../repositories/catalogRepository';
 import type { Tier } from '../services/tiers';
 import { getTierLimits } from '../services/tiers';
@@ -138,7 +138,7 @@ export type LocalToolDeps = {
   questEligibility: Pick<QuestEligibilityService, 'check'>;
   catalog: Pick<CatalogRepository,
     'findItemLoose' | 'findItems' | 'findCreatureLoose' | 'findSpellLoose'
-    | 'findNpcLoose' | 'findHuntingPlaces'>;
+    | 'findNpcLoose' | 'findHuntingPlaces' | 'findTradeOffersForItem' | 'findTradeOffersForNpc'>;
 };
 
 export type BoundToolRouter = Pick<McpBridge, 'callTool'>;
@@ -257,7 +257,24 @@ const notInCatalog = (kind: string, name: string): McpToolResult => ({
 
 const joinLines = (lines: Array<string | false | null | undefined>): string => lines.filter(Boolean).join('\n');
 
-function renderItem(i: CatalogItemRow): string {
+/** At most this many NPCs per direction; the rest collapse into "+N more". */
+const TRADE_NAME_CAP = 6;
+
+/**
+ * "Rashid (400 gp), H.L. (110 gp)". A NULL override means the NPC trades at the
+ * item's own price, which is why the fallback is the item column and not zero —
+ * dropping that distinction would claim an NPC trades for nothing.
+ */
+function renderOfferNames(offers: CatalogTradeOfferRow[], fallbackPrice: number | null): string {
+  const shown = offers.slice(0, TRADE_NAME_CAP).map((o) => {
+    const price = o.price ?? fallbackPrice;
+    return price === null ? o.npc_name : `${o.npc_name} (${price} gp)`;
+  });
+  const rest = offers.length - shown.length;
+  return shown.join(', ') + (rest > 0 ? `, +${rest} more` : '');
+}
+
+function renderItem(i: CatalogItemRow, offers: CatalogTradeOfferRow[] = []): string {
   const combat = [
     i.attack !== null && `attack ${i.attack}`,
     i.defense !== null && `defence ${i.defense}`,
@@ -270,13 +287,20 @@ function renderItem(i: CatalogItemRow): string {
       `market value ${i.market_value_low}${i.market_value_high !== null && i.market_value_high !== i.market_value_low ? `-${i.market_value_high}` : ''} gp`
   ].filter(Boolean).join('; ');
 
+  const sells = offers.filter((o) => o.direction === 'npc_sells');
+  const buys = offers.filter((o) => o.direction === 'npc_buys');
+
   return joinLines([
     `**${i.title}**${i.object_class ? ` — ${i.object_class}` : ''}${i.slot ? ` (${i.slot} slot)` : ''}`,
     combat && `Combat: ${combat}`,
     i.weight !== null && `Weight: ${i.weight} oz`,
-    (i.level_required !== null || i.vocation) &&
-      `Requires: ${[i.level_required !== null && `level ${i.level_required}`, i.vocation].filter(Boolean).join(', ')}`,
+    // levelrequired = 0 means no requirement; printing "level 0" reads like one.
+    ((i.level_required !== null && i.level_required > 0) || i.vocation) &&
+      `Requires: ${[i.level_required !== null && i.level_required > 0 && `level ${i.level_required}`, i.vocation].filter(Boolean).join(', ')}`,
     prices && `Prices: ${prices}`,
+    // Named NPCs, so "where do I sell this" has an actual answer.
+    sells.length > 0 && `Buy from: ${renderOfferNames(sells, i.npc_buy_price)}`,
+    buys.length > 0 && `Sell to: ${renderOfferNames(buys, i.npc_sell_price)}`,
     i.stackable !== null && `Stackable: ${i.stackable ? 'yes' : 'no'}`,
     `Source: ${i.wiki_url}`,
     i.attribution
@@ -322,12 +346,28 @@ function renderSpell(s: CatalogSpellRow): string {
   ]);
 }
 
-function renderNpc(n: CatalogNpcRow): string {
+/** "Plate Armor (400 gp), Backpack (10 gp)" for one trade direction. */
+function renderNpcTrades(rows: CatalogNpcTradeRow[], direction: 'npc_buys' | 'npc_sells'): string {
+  const matching = rows.filter((r) => r.direction === direction);
+  const shown = matching.slice(0, TRADE_NAME_CAP).map((r) => {
+    const price = r.price ?? (direction === 'npc_buys' ? r.item_npc_sell_price : r.item_npc_buy_price);
+    return price === null ? r.item_title : `${r.item_title} (${price} gp)`;
+  });
+  const rest = matching.length - shown.length;
+  return shown.length === 0 ? '' : shown.join(', ') + (rest > 0 ? `, +${rest} more` : '');
+}
+
+function renderNpc(n: CatalogNpcRow, trades: CatalogNpcTradeRow[] = []): string {
+  const buysFromPlayers = renderNpcTrades(trades, 'npc_buys');
+  const sellsToPlayers = renderNpcTrades(trades, 'npc_sells');
+
   return joinLines([
     `**${n.title}**${n.job ? ` — ${n.job}` : ''}`,
     n.city && `City: ${n.city}`,
     n.location && `Where: ${n.location}`,
     n.buysell !== null && `Trades: ${n.buysell ? 'yes' : 'no'}`,
+    buysFromPlayers && `Buys: ${buysFromPlayers}`,
+    sellsToPlayers && `Sells: ${sellsToPlayers}`,
     `Source: ${n.wiki_url}`,
     n.attribution
   ]);
@@ -353,7 +393,9 @@ function renderHunt(h: CatalogHuntRow): string {
 async function getItemInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
   const name = String(args.item ?? '');
   const row = await deps.catalog.findItemLoose(name);
-  return row ? { text: renderItem(row), isError: false } : notInCatalog('item', name);
+  if (!row) return notInCatalog('item', name);
+  const offers = await deps.catalog.findTradeOffersForItem(row.id);
+  return { text: renderItem(row, offers), isError: false };
 }
 
 async function getCreatureInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
@@ -371,7 +413,9 @@ async function getSpellInfo(deps: LocalToolDeps, args: Record<string, unknown>):
 async function getNpcInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
   const name = String(args.npc ?? '');
   const row = await deps.catalog.findNpcLoose(name);
-  return row ? { text: renderNpc(row), isError: false } : notInCatalog('npc', name);
+  if (!row) return notInCatalog('npc', name);
+  const trades = await deps.catalog.findTradeOffersForNpc(row.title);
+  return { text: renderNpc(row, trades), isError: false };
 }
 
 async function findItems(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {

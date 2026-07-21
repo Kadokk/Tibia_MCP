@@ -5,6 +5,7 @@ import type {
   CatalogItemRecord,
   CatalogNpcRecord,
   CatalogSpellRecord,
+  TradeDirection,
   TradeOffer
 } from '../importers/catalogWikiParser';
 
@@ -50,6 +51,19 @@ export type CatalogHuntRow = {
   level_mages: number | null; loot_rating: string | null; loot_stars: number | null;
   exp_rating: string | null; exp_stars: number | null; best_loot: string[]; creatures: string[];
   attributes: Record<string, string>; wiki_url: string; attribution: string; source_revision: string | null;
+};
+
+export type CatalogTradeOfferRow = {
+  npc_name: string;
+  direction: TradeDirection;
+  /** NULL means "no per-NPC override" — fall back to the item's default price. */
+  price: number | null;
+};
+
+export type CatalogNpcTradeRow = CatalogTradeOfferRow & {
+  item_title: string;
+  item_npc_buy_price: number | null;
+  item_npc_sell_price: number | null;
 };
 
 export type CatalogCounts = Record<CatalogContentType, number>;
@@ -399,6 +413,41 @@ export class CatalogRepository {
        ORDER BY ${column} DESC, title
        LIMIT $2`,
       [filters.level, filters.limit ?? DEFAULT_LIMIT]);
+  }
+
+  /**
+   * Which NPCs trade an item, and at what price.
+   *
+   * Ordered best-first, which depends on which way the trade runs: the highest
+   * payer leads when selling to an NPC, the cheapest seller when buying from one.
+   * A NULL price is not zero — it means the NPC trades at the item's default
+   * price — so those sort after the explicit offers rather than below them.
+   */
+  async findTradeOffersForItem(itemId: number): Promise<CatalogTradeOfferRow[]> {
+    return this.db.query<CatalogTradeOfferRow>(
+      `SELECT npc_name, direction, price
+       FROM catalog_npc_trade_offers
+       WHERE item_id = $1
+       ORDER BY direction,
+                (price IS NULL),
+                CASE WHEN direction = 'npc_buys' THEN -price ELSE price END,
+                npc_name`,
+      [itemId]);
+  }
+
+  /** What one NPC trades. Matches on lower(npc_name), which the table indexes. */
+  async findTradeOffersForNpc(npcName: string, limit = DEFAULT_LIMIT): Promise<CatalogNpcTradeRow[]> {
+    return this.db.query<CatalogNpcTradeRow>(
+      `SELECT o.npc_name, o.direction, o.price,
+              i.title AS item_title,
+              i.npc_buy_price AS item_npc_buy_price,
+              i.npc_sell_price AS item_npc_sell_price
+       FROM catalog_npc_trade_offers o
+       JOIN catalog_items i ON i.id = o.item_id
+       WHERE lower(o.npc_name) = lower($1) AND i.active
+       ORDER BY o.direction, i.title
+       LIMIT $2`,
+      [npcName, limit]);
   }
 
   /** One row of catalog sizes, for the import CLI and ops checks. */

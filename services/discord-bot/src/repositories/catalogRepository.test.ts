@@ -440,3 +440,47 @@ describe('CatalogRepository — clearSourceRevisions', () => {
     }
   });
 });
+
+describe('CatalogRepository — trade offers', () => {
+  it('reads an item\'s offers, best selling price first', async () => {
+    const db = fakeDb([{ npc_name: 'Rashid', direction: 'npc_buys', price: 400 }]);
+    const rows = await repo(db).findTradeOffersForItem(42);
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('FROM catalog_npc_trade_offers');
+    expect(sql).toContain('item_id = $1');
+    // A null price means "use the item's default", so it must not outrank a named one.
+    expect(sql).toContain('price IS NULL');
+    // Best-first depends on which way the trade runs: highest payer when selling,
+    // cheapest seller when buying.
+    expect(sql).toContain('CASE WHEN direction');
+    expect(params).toEqual([42]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('reads what one npc trades, joined to the item titles', async () => {
+    const db = fakeDb([]);
+    await repo(db).findTradeOffersForNpc('Rashid');
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('JOIN catalog_items');
+    // Matches the lower(npc_name) index added with the table.
+    expect(sql).toContain('lower(o.npc_name) = lower($1)');
+    expect(sql).toContain('LIMIT $2');
+    expect(params).toEqual(['Rashid', 25]);
+  });
+
+  it('honours a caller-supplied limit for an npc\'s offers', async () => {
+    const db = fakeDb([]);
+    await repo(db).findTradeOffersForNpc('Rashid', 5);
+
+    expect(db.query.mock.calls[0][1]).toEqual(['Rashid', 5]);
+  });
+
+  it('only reports offers on active items', async () => {
+    const db = fakeDb([]);
+    await repo(db).findTradeOffersForNpc('Rashid');
+
+    expect(db.query.mock.calls[0][0]).toContain('i.active');
+  });
+});

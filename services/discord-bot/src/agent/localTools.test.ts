@@ -66,7 +66,17 @@ function makeRouter(over: Record<string, unknown> = {}) {
       findCreatureLoose: vi.fn().mockResolvedValue(CREATURE_ROW),
       findSpellLoose: vi.fn().mockResolvedValue(SPELL_ROW),
       findNpcLoose: vi.fn().mockResolvedValue(NPC_ROW),
-      findHuntingPlaces: vi.fn().mockResolvedValue([HUNT_ROW])
+      findHuntingPlaces: vi.fn().mockResolvedValue([HUNT_ROW]),
+      findTradeOffersForItem: vi.fn().mockResolvedValue([
+        { npc_name: 'Rashid', direction: 'npc_buys', price: 400 },
+        { npc_name: 'H.L.', direction: 'npc_buys', price: 110 },
+        { npc_name: 'Azil', direction: 'npc_buys', price: null },
+        { npc_name: 'Baltim', direction: 'npc_sells', price: null }
+      ]),
+      findTradeOffersForNpc: vi.fn().mockResolvedValue([
+        { npc_name: 'Rashid', direction: 'npc_buys', price: 400, item_title: 'Plate Armor', item_npc_buy_price: 1200, item_npc_sell_price: 400 },
+        { npc_name: 'Rashid', direction: 'npc_sells', price: null, item_title: 'Backpack', item_npc_buy_price: 10, item_npc_sell_price: null }
+      ])
     },
     ...over
   };
@@ -449,5 +459,144 @@ describe('buildLoopToolDefs', () => {
 
     expect(deps.mcp.callTool).toHaveBeenCalledWith('search_item', { query: 'gold token' });
     expect(r.text).toBe('mcp result');
+  });
+});
+
+describe('catalog tools — npc trade offers', () => {
+  /**
+   * Task 12 follow-up. catalog_npc_trade_offers was populated on every import but
+   * read by nothing, so "who buys plate armor" could only be answered with a
+   * price and no name — and the per-NPC overrides, the whole point of the table,
+   * were unreachable.
+   */
+  it('names who buys an item, best price first', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'plate armor' });
+
+    expect((deps.catalog as never as { findTradeOffersForItem: ReturnType<typeof vi.fn> }).findTradeOffersForItem)
+      .toHaveBeenCalledWith(1);   // the row id from findItemLoose
+    expect(r.text).toContain('Rashid');
+    expect(r.text).toContain('400');
+    expect(r.text).toContain('H.L.');
+    expect(r.text).toContain('110');
+  });
+
+  it('names who sells an item as well as who buys it', async () => {
+    const { router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'plate armor' });
+
+    expect(r.text).toContain('Baltim');
+    expect(r.text).toMatch(/sell to/i);
+    expect(r.text).toMatch(/buy from/i);
+  });
+
+  // A NULL override is not a free trade: the NPC pays the item's default price.
+  it('falls back to the item price for an npc with no override', async () => {
+    const { router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'plate armor' });
+    const line = r.text.split('\n').find((l) => l.includes('Azil')) ?? '';
+
+    expect(line).toContain('Azil (400 gp)');   // ITEM_ROW.npc_sell_price
+    expect(line).not.toMatch(/Azil \(0 gp\)/); // a null override is not a free trade
+  });
+
+  it('omits the trade lines entirely when nothing trades the item', async () => {
+    const { router } = makeRouter({
+      catalog: {
+        findItemLoose: vi.fn().mockResolvedValue(ITEM_ROW),
+        findItems: vi.fn(), findCreatureLoose: vi.fn(), findSpellLoose: vi.fn(),
+        findNpcLoose: vi.fn(), findHuntingPlaces: vi.fn(),
+        findTradeOffersForItem: vi.fn().mockResolvedValue([]),
+        findTradeOffersForNpc: vi.fn().mockResolvedValue([])
+      }
+    });
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'plate armor' });
+
+    expect(r.text).not.toMatch(/sell to/i);
+    expect(r.text).toContain('Plate Armor');   // the rest still renders
+  });
+
+  it('caps a long buyer list rather than pasting every npc', async () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ npc_name: `Npc${i}`, direction: 'npc_buys' as const, price: 100 + i }));
+    const { router } = makeRouter({
+      catalog: {
+        findItemLoose: vi.fn().mockResolvedValue(ITEM_ROW),
+        findItems: vi.fn(), findCreatureLoose: vi.fn(), findSpellLoose: vi.fn(),
+        findNpcLoose: vi.fn(), findHuntingPlaces: vi.fn(),
+        findTradeOffersForItem: vi.fn().mockResolvedValue(many),
+        findTradeOffersForNpc: vi.fn().mockResolvedValue([])
+      }
+    });
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'plate armor' });
+
+    expect(r.text).toMatch(/\+\d+ more/);
+    expect((r.text.match(/Npc\d+/g) ?? []).length).toBeLessThanOrEqual(6);
+  });
+
+  it('lists what an npc trades on get_npc_info', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_npc_info', { npc: 'rashid' });
+
+    expect((deps.catalog as never as { findTradeOffersForNpc: ReturnType<typeof vi.fn> }).findTradeOffersForNpc)
+      .toHaveBeenCalledWith('Rashid');
+    expect(r.text).toContain('Plate Armor');
+    expect(r.text).toContain('400');
+    expect(r.text).toContain('Backpack');
+  });
+
+  it('omits the trade lines for an npc that trades nothing', async () => {
+    const { router } = makeRouter({
+      catalog: {
+        findItemLoose: vi.fn(), findItems: vi.fn(), findCreatureLoose: vi.fn(),
+        findSpellLoose: vi.fn(), findNpcLoose: vi.fn().mockResolvedValue(NPC_ROW),
+        findHuntingPlaces: vi.fn(),
+        findTradeOffersForItem: vi.fn().mockResolvedValue([]),
+        findTradeOffersForNpc: vi.fn().mockResolvedValue([])
+      }
+    });
+    const r = await router.bind('u1', 'free').callTool('get_npc_info', { npc: 'rashid' });
+
+    expect(r.text).toContain('Rashid');
+    expect(r.text).not.toMatch(/buys:/i);
+  });
+
+  // levelrequired = 0 means "no requirement"; printing "Requires: level 0" is noise
+  // that reads like a real constraint.
+  it('does not print a level requirement of zero', async () => {
+    const { router } = makeRouter({
+      catalog: {
+        findItemLoose: vi.fn().mockResolvedValue({ ...ITEM_ROW, level_required: 0 }),
+        findItems: vi.fn(), findCreatureLoose: vi.fn(), findSpellLoose: vi.fn(),
+        findNpcLoose: vi.fn(), findHuntingPlaces: vi.fn(),
+        findTradeOffersForItem: vi.fn().mockResolvedValue([]),
+        findTradeOffersForNpc: vi.fn().mockResolvedValue([])
+      }
+    });
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'x' });
+
+    expect(r.text).not.toContain('level 0');
+  });
+
+  it('still prints a real level requirement', async () => {
+    const { router } = makeRouter({
+      catalog: {
+        findItemLoose: vi.fn().mockResolvedValue({ ...ITEM_ROW, level_required: 80 }),
+        findItems: vi.fn(), findCreatureLoose: vi.fn(), findSpellLoose: vi.fn(),
+        findNpcLoose: vi.fn(), findHuntingPlaces: vi.fn(),
+        findTradeOffersForItem: vi.fn().mockResolvedValue([]),
+        findTradeOffersForNpc: vi.fn().mockResolvedValue([])
+      }
+    });
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'x' });
+
+    expect(r.text).toContain('level 80');
+  });
+
+  it('still carries attribution once the trade lines are added', async () => {
+    const { router } = makeRouter();
+    for (const [name, args] of [['get_item_info', { item: 'plate armor' }], ['get_npc_info', { npc: 'rashid' }]] as const) {
+      const r = await router.bind('u1', 'free').callTool(name, args);
+      expect(r.text).toContain('CC BY-SA');
+    }
   });
 });
