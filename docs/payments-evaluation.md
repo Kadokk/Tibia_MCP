@@ -234,20 +234,16 @@ Two conditions attach to this recommendation:
 
 ## Decision
 
-**PENDING OWNER SIGN-OFF.**
-
-Per the standing approval-integrity rule, this section is filled in only on an explicitly
-submitted owner message or a verbatim `[Brain] OWNER APPROVED: <decision>` relay. Composer
-text and dialog selections do not count.
+**DECIDED.**
 
 | Field | Value |
 |---|---|
-| Decision | _(pending)_ |
-| Decided by | _(pending)_ |
-| Date | _(pending)_ |
-| Notes | _(pending)_ |
+| Decision | Option (b): Stripe Payment Link + outbound polling |
+| Decided by | Owner, via Brain's `[Brain] OWNER APPROVED: ...` relay |
+| Date | 2026-07-21 |
+| Notes | Two conditions attach: (1) Task 17 must scope the two-stage implementation honestly — session polling detects signup, a separate subscription-status poll detects renewal/lapse/refund and revokes accordingly; a one-stage build that grants but never revokes is stop-and-flag territory, not a shortcut. (2) The Discord monetization-requirements policy question (see "Open risk" above) gets a written inquiry to Discord developer support, added to `docs/launch-checklist.md` as a pre-launch gate alongside the CipSoft email — this blocks launch, not Task 17's code. |
 
-Tasks 17–18 are gated on this decision.
+Tasks 17–18 are unblocked as of this decision.
 
 ---
 

@@ -10,18 +10,25 @@ anyone who is not a friendly tester; gates 5–6 run during and after the rollou
 
 ---
 
-## Gate 1 — CipSoft fansite inquiry SENT ☐ **BLOCKS ALL MARKETING**
+## Gate 1 — Pre-launch written inquiries SENT ☐ **BLOCKS ALL MARKETING**
+
+Two independent written inquiries gate marketing, added at different points in the phase
+but functioning as one pair: ask first, market after. Neither blocks merging or shipping —
+the bot works either way. What's in question is whether the platforms it depends on
+(CipSoft's fansite programme, Discord's monetization policy) are comfortable with how this
+specific paid tier is built and sold.
+
+### Gate 1a — CipSoft fansite inquiry SENT
 
 The draft, the verified submission channel and the owner-action note live in
 [`docs/fansite-inquiry.md`](./fansite-inquiry.md). That document is **still a draft awaiting
 send** as of 2026-07-21 — its own status line says so, and nothing in this checklist should
 be read as implying otherwise.
 
-Why this gates marketing rather than merging: the bot is built entirely on public
-TibiaWiki data under CC BY-SA and does not touch the game client, so shipping it is not in
-question. What is in question is whether CipSoft's fansite programme is comfortable with a
-*paid* tier built on Tibia-derived data. Asking after a marketing push would be asking
-forgiveness; asking first costs one email.
+The bot is built entirely on public TibiaWiki data under CC BY-SA and does not touch the
+game client, so shipping it is not in question. What is in question is whether CipSoft's
+fansite programme is comfortable with a *paid* tier built on Tibia-derived data. Asking
+after a marketing push would be asking forgiveness; asking first costs one email.
 
 - [ ] Copy the programme email address from the live page at send time (the inquiry doc
       deliberately does not transcribe it, so a stale address cannot go out).
@@ -41,8 +48,30 @@ forgiveness; asking first costs one email.
       assistant built on public wiki data, with attribution") survives every branch above;
       language implying endorsement survives only the first.
 
-**Nothing below unblocks this. No Discord server invites beyond friendly testers, no posts,
-no listings, until the send is recorded.**
+### Gate 1b — Discord monetization-requirements inquiry SENT
+
+Added by owner decision on Task 16 (2026-07-21, see `docs/payments-evaluation.md`'s "Open
+risk" section and Decision notes). Discord's Monetization Requirements policy reportedly
+requires apps with paid features to also offer them through Discord's own Premium Apps, at
+no higher price — but TibiaEdge is Mexico-based and ineligible for Premium Apps entirely
+(see the payments evaluation doc), so the two requirements may collide. The authoritative
+article 403s to automated fetching, so this needs a human-submitted question, mirroring the
+Gate 1a pattern:
+
+- [ ] Submit a written question to Discord developer support: our team is Mexico-based and
+      therefore ineligible for Premium Apps; may we sell a subscription for our app through
+      Stripe, and if so how do we satisfy the required-support policy? Record the channel
+      and date sent here.
+- [ ] Record the reply, or "no reply after N weeks."
+- [ ] If the answer requires offering the tier through Discord (which this owner cannot do),
+      escalate to the owner before any Stripe-based sale goes live — this is a business/legal
+      question, not an engineering one.
+
+This gates **launch**, not Task 17's code — the Stripe implementation can be built and
+tested while this inquiry is in flight, per the payments-evaluation decision notes.
+
+**Nothing below unblocks either half of this gate. No Discord server invites beyond friendly
+testers, no posts, no listings, until both sends are recorded.**
 
 ---
 
@@ -211,9 +240,10 @@ friendly testers cannot supply them.
 
 | Gap | Impact | Owner action |
 |---|---|---|
-| CipSoft inquiry not sent | Gate 1 open; **no marketing** | Send, then record date/channel in `fansite-inquiry.md` |
+| CipSoft inquiry not sent | Gate 1a open; **no marketing** | Send, then record date/channel in `fansite-inquiry.md` |
+| Discord monetization-requirements inquiry not sent | Gate 1b open; **no marketing** | Submit per Gate 1b, record date/channel here |
 | No isolation eval case | Gate 3 rests on the manual drill for end-to-end proof | Ticket: add an isolation case to the golden eval |
-| Payments mechanism undecided (Task 16) | Blocks Tasks 17–18, not this checklist | Owner decision, relayed per the approval-integrity rule |
+| ~~Payments mechanism undecided (Task 16)~~ **DECIDED 2026-07-21** | Option (b) Stripe Payment Link + polling; Tasks 17–18 unblocked | See `docs/payments-evaluation.md` Decision section |
 | `/price` emits no CC BY-SA attribution (**confirmed** 2026-07-21) | Licence gap on a user-facing command; undercuts the Gate 1 good-faith story | Owner decision before promotion — see note below |
 
 **On the `/price` attribution gap.** Moving `/price` onto the catalog is Phase 6 scope and
@@ -236,7 +266,8 @@ rather than decided. It does not block merge either way.
 
 | Gate | Status | Date | Evidence |
 |---|---|---|---|
-| 1 CipSoft inquiry sent | ☐ | | |
+| 1a CipSoft inquiry sent | ☐ | | |
+| 1b Discord monetization-requirements inquiry sent | ☐ | | |
 | 2 Attribution audit | ☐ | | |
 | 3 Cross-user-leak verification | ☐ | | |
 | 4 Pricing copy review | ☐ | | |
