@@ -3,6 +3,10 @@ import type { MemoryRepository } from '../repositories/memoryRepository';
 import type { CaptureRepository } from '../repositories/captureRepository';
 import type { QuestRepository, QuestRow } from '../repositories/questRepository';
 import type { QuestEligibilityService } from '../services/questEligibilityService';
+import type {
+  CatalogCreatureRow, CatalogHuntRow, CatalogItemRow, CatalogNpcRow,
+  CatalogRepository, CatalogSpellRow
+} from '../repositories/catalogRepository';
 import type { Tier } from '../services/tiers';
 import { getTierLimits } from '../services/tiers';
 import { sanitizeFact } from '../services/factSanitizer';
@@ -49,6 +53,60 @@ export const localToolDefs: McpToolDef[] = [
     description:
       "Check whether the asking player's linked character can start a given quest (level, premium, already-done). Use before recommending a specific quest.",
     inputSchema: { type: 'object', properties: { quest: { type: 'string', description: 'Quest name' } }, required: ['quest'] }
+  },
+  {
+    name: 'get_item_info',
+    description:
+      'Look up one Tibia item in the wiki catalog: attack/defence/armour, weight, level and vocation requirements, NPC buy and sell prices, and market value. Understands common abbreviations such as MSW, SD, GFB.',
+    inputSchema: { type: 'object', properties: { item: { type: 'string', description: 'Item name or abbreviation, e.g. "magic sword" or "msw"' } }, required: ['item'] }
+  },
+  {
+    name: 'find_items',
+    description:
+      'List catalog items matching a name fragment, object class, equipment slot, or maximum level requirement. Use for "what armour can I wear at level 40" style questions; use get_item_info when the player named one item.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'Name fragment, e.g. "helmet"' },
+        object_class: { type: 'string', description: 'Object class, e.g. "Body Equipment", "Runes"' },
+        slot: { type: 'string', description: 'Equipment slot, e.g. "Body", "Head"' },
+        max_level: { type: 'number', description: 'Highest level requirement to include' },
+        limit: { type: 'number', description: 'How many to return (max 10)' }
+      },
+      required: ['search']
+    }
+  },
+  {
+    name: 'get_creature_info',
+    description:
+      'Look up one Tibia creature: hitpoints, experience, armour, elemental resistances, abilities, loot table and where it lives. Prefer this over search_creature.',
+    inputSchema: { type: 'object', properties: { creature: { type: 'string', description: 'Creature name, e.g. "Demon"' } }, required: ['creature'] }
+  },
+  {
+    name: 'get_spell_info',
+    description:
+      'Look up one Tibia spell by name or incantation: words, mana cost, level and vocation requirements, cooldown and effect.',
+    inputSchema: { type: 'object', properties: { spell: { type: 'string', description: 'Spell name or incantation, e.g. "Ultimate Healing" or "exura vita"' } }, required: ['spell'] }
+  },
+  {
+    name: 'get_npc_info',
+    description:
+      'Look up one Tibia NPC: job, city, where to find them, and whether they trade.',
+    inputSchema: { type: 'object', properties: { npc: { type: 'string', description: 'NPC name, e.g. "Rashid"' } }, required: ['npc'] }
+  },
+  {
+    name: 'find_hunting_places',
+    description:
+      'Suggest hunting grounds suited to a character level and vocation, with the loot and experience ratings and which creatures live there. Use for "where should I hunt at level X" questions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        level: { type: 'number', description: "The character's level" },
+        vocation: { type: 'string', description: 'Knight, Paladin, Druid or Sorcerer (promoted names work too)' },
+        limit: { type: 'number', description: 'How many to return (max 5)' }
+      },
+      required: ['level', 'vocation']
+    }
   }
 ];
 
@@ -60,6 +118,9 @@ export type LocalToolDeps = {
   captures: Pick<CaptureRepository, 'append'>;
   quests: Pick<QuestRepository, 'findByNameLoose'>;
   questEligibility: Pick<QuestEligibilityService, 'check'>;
+  catalog: Pick<CatalogRepository,
+    'findItemLoose' | 'findItems' | 'findCreatureLoose' | 'findSpellLoose'
+    | 'findNpcLoose' | 'findHuntingPlaces'>;
 };
 
 export type BoundToolRouter = Pick<McpBridge, 'callTool'>;
@@ -79,6 +140,13 @@ export function createToolRouter(deps: LocalToolDeps): { bind(userId: string, ti
           // Quest tools are public data — not tier-gated. They route before the premium gate.
           if (name === 'get_quest_info') return getQuestInfo(deps, args);
           if (name === 'check_quest_eligibility') return checkQuestEligibility(deps, userId, args);
+          // Catalog tools are public wiki data, like the quest tools: no tier gate.
+          if (name === 'get_item_info') return getItemInfo(deps, args);
+          if (name === 'find_items') return findItems(deps, args);
+          if (name === 'get_creature_info') return getCreatureInfo(deps, args);
+          if (name === 'get_spell_info') return getSpellInfo(deps, args);
+          if (name === 'get_npc_info') return getNpcInfo(deps, args);
+          if (name === 'find_hunting_places') return findHuntingPlaces(deps, args);
           if (!premium) return { text: PREMIUM_MEMORY_MESSAGE, isError: false };
           if (name === 'remember') return remember(deps, userId, tier, args);
           return recallMemory(deps, userId, args);
@@ -147,4 +215,178 @@ async function checkQuestEligibility(deps: LocalToolDeps, userId: string, args: 
   }
   const summary = `Eligible: ${r.eligible ? 'yes' : 'no'}${r.reasons.length ? ` — ${r.reasons.join('; ')}` : ''}`;
   return { text: `${summary}\n${renderQuestInfo(r.quest)}`, isError: false };
+}
+
+// --- Catalog tools -------------------------------------------------------
+// Public TibiaWiki data, so these route before the premium gate. Every rendered
+// result ends with the row's attribution notice: CC BY-SA requires it to travel
+// with the content, and the model is instructed to keep it in the reply.
+
+const FIND_ITEMS_CAP = 10;
+const FIND_HUNTS_CAP = 5;
+
+/** Clamps a model-supplied limit into [1, cap], falling back to the cap. */
+function boundedLimit(raw: unknown, cap: number): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) return cap;
+  return Math.min(n, cap);
+}
+
+const notInCatalog = (kind: string, name: string): McpToolResult => ({
+  text: `"${name}" is not in the ${kind} catalog. Check the spelling, or try the exact TibiaWiki page name.`,
+  isError: false
+});
+
+const joinLines = (lines: Array<string | false | null | undefined>): string => lines.filter(Boolean).join('\n');
+
+function renderItem(i: CatalogItemRow): string {
+  const combat = [
+    i.attack !== null && `attack ${i.attack}`,
+    i.defense !== null && `defence ${i.defense}`,
+    i.armor !== null && `armour ${i.armor}`
+  ].filter(Boolean).join(', ');
+  const prices = [
+    i.npc_buy_price !== null && `NPCs sell it for ${i.npc_buy_price} gp`,
+    i.npc_sell_price !== null && `NPCs buy it for ${i.npc_sell_price} gp`,
+    i.market_value_low !== null &&
+      `market value ${i.market_value_low}${i.market_value_high !== null && i.market_value_high !== i.market_value_low ? `-${i.market_value_high}` : ''} gp`
+  ].filter(Boolean).join('; ');
+
+  return joinLines([
+    `**${i.title}**${i.object_class ? ` — ${i.object_class}` : ''}${i.slot ? ` (${i.slot} slot)` : ''}`,
+    combat && `Combat: ${combat}`,
+    i.weight !== null && `Weight: ${i.weight} oz`,
+    (i.level_required !== null || i.vocation) &&
+      `Requires: ${[i.level_required !== null && `level ${i.level_required}`, i.vocation].filter(Boolean).join(', ')}`,
+    prices && `Prices: ${prices}`,
+    i.stackable !== null && `Stackable: ${i.stackable ? 'yes' : 'no'}`,
+    `Source: ${i.wiki_url}`,
+    i.attribution
+  ]);
+}
+
+function renderCreature(c: CatalogCreatureRow): string {
+  const resistances = Object.entries(c.resistances ?? {})
+    .map(([element, pct]) => `${element} ${pct}%`).join(', ');
+  const abilities = (c.abilities as Array<{ name: string; range: string | null; element: string | null }> ?? [])
+    .slice(0, 8)
+    .map((a) => `${a.name}${a.range ? ` (${a.range}${a.element ? ` ${a.element}` : ''})` : a.element ? ` (${a.element})` : ''}`)
+    .join(', ');
+  const loot = (c.loot as Array<{ item: string; amount: string | null; rarity: string | null }> ?? [])
+    .slice(0, 12)
+    .map((l) => `${l.amount ? `${l.amount} ` : ''}${l.item}${l.rarity ? ` (${l.rarity})` : ''}`)
+    .join(', ');
+
+  return joinLines([
+    `**${c.title}**${c.bestiary_class ? ` — ${c.bestiary_class}` : ''}${c.is_boss ? ' (boss)' : ''}`,
+    `Stats: ${[c.hp !== null && `${c.hp} hp`, c.exp !== null && `${c.exp} exp`, c.armor !== null && `armour ${c.armor}`].filter(Boolean).join(', ')}`,
+    // A 0% resistance is an immunity and matters as much as a high one.
+    resistances && `Resistances: ${resistances}`,
+    abilities && `Abilities: ${abilities}`,
+    loot && `Loot: ${loot}`,
+    c.locations?.length ? `Found in: ${c.locations.slice(0, 8).join(', ')}` : '',
+    `Source: ${c.wiki_url}`,
+    c.attribution
+  ]);
+}
+
+function renderSpell(s: CatalogSpellRow): string {
+  return joinLines([
+    `**${s.title}**${s.spell_class ? ` — ${s.spell_class}` : ''}${s.subclass ? ` / ${s.subclass}` : ''}`,
+    s.words && `Words: ${s.words}`,
+    `Cost: ${[s.mana !== null && `${s.mana} mana`, s.level_required !== null && `level ${s.level_required}`].filter(Boolean).join(', ') || 'unknown'}`,
+    s.vocations?.length ? `Vocations: ${s.vocations.join(', ')}` : '',
+    s.cooldown !== null && `Cooldown: ${s.cooldown}s`,
+    s.premium !== null && `Premium: ${s.premium ? 'yes' : 'no'}`,
+    s.effect && `Effect: ${s.effect}`,
+    `Source: ${s.wiki_url}`,
+    s.attribution
+  ]);
+}
+
+function renderNpc(n: CatalogNpcRow): string {
+  return joinLines([
+    `**${n.title}**${n.job ? ` — ${n.job}` : ''}`,
+    n.city && `City: ${n.city}`,
+    n.location && `Where: ${n.location}`,
+    n.buysell !== null && `Trades: ${n.buysell ? 'yes' : 'no'}`,
+    `Source: ${n.wiki_url}`,
+    n.attribution
+  ]);
+}
+
+function renderHunt(h: CatalogHuntRow): string {
+  const levels = [
+    h.level_knights !== null && `knights ${h.level_knights}+`,
+    h.level_paladins !== null && `paladins ${h.level_paladins}+`,
+    h.level_mages !== null && `mages ${h.level_mages}+`
+  ].filter(Boolean).join(', ');
+  return joinLines([
+    `**${h.title}**${h.city ? ` (${h.city})` : ''}`,
+    levels && `Recommended: ${levels}`,
+    (h.loot_rating || h.exp_rating) &&
+      `Ratings: loot ${h.loot_rating ?? '?'}${h.loot_stars !== null ? ` (${h.loot_stars}★)` : ''}, exp ${h.exp_rating ?? '?'}${h.exp_stars !== null ? ` (${h.exp_stars}★)` : ''}`,
+    h.creatures?.length ? `Creatures: ${h.creatures.slice(0, 10).join(', ')}` : '',
+    h.best_loot?.length ? `Best loot: ${h.best_loot.slice(0, 5).join(', ')}` : '',
+    h.location && `Where: ${h.location}`
+  ]);
+}
+
+async function getItemInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
+  const name = String(args.item ?? '');
+  const row = await deps.catalog.findItemLoose(name);
+  return row ? { text: renderItem(row), isError: false } : notInCatalog('item', name);
+}
+
+async function getCreatureInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
+  const name = String(args.creature ?? '');
+  const row = await deps.catalog.findCreatureLoose(name);
+  return row ? { text: renderCreature(row), isError: false } : notInCatalog('creature', name);
+}
+
+async function getSpellInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
+  const name = String(args.spell ?? '');
+  const row = await deps.catalog.findSpellLoose(name);
+  return row ? { text: renderSpell(row), isError: false } : notInCatalog('spell', name);
+}
+
+async function getNpcInfo(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
+  const name = String(args.npc ?? '');
+  const row = await deps.catalog.findNpcLoose(name);
+  return row ? { text: renderNpc(row), isError: false } : notInCatalog('npc', name);
+}
+
+async function findItems(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
+  const search = String(args.search ?? '');
+  const rows = await deps.catalog.findItems({
+    search,
+    objectClass: args.object_class === undefined ? undefined : String(args.object_class),
+    slot: args.slot === undefined ? undefined : String(args.slot),
+    maxLevel: Number.isFinite(Number(args.max_level)) ? Number(args.max_level) : undefined,
+    limit: boundedLimit(args.limit, FIND_ITEMS_CAP)
+  });
+  if (!rows.length) return { text: `No items in the catalog match "${search}".`, isError: false };
+  return {
+    text: joinLines([
+      ...rows.map((i) => `- **${i.title}**${i.object_class ? ` (${i.object_class})` : ''}` +
+        `${i.level_required !== null ? `, level ${i.level_required}` : ''}` +
+        `${i.armor !== null ? `, armour ${i.armor}` : ''}${i.attack !== null ? `, attack ${i.attack}` : ''}`),
+      rows[0].attribution
+    ]),
+    isError: false
+  };
+}
+
+async function findHuntingPlaces(deps: LocalToolDeps, args: Record<string, unknown>): Promise<McpToolResult> {
+  const level = Number(args.level);
+  const vocation = String(args.vocation ?? '');
+  const rows = await deps.catalog.findHuntingPlaces({
+    level: Number.isFinite(level) ? level : 1,
+    vocation,
+    limit: boundedLimit(args.limit, FIND_HUNTS_CAP)
+  });
+  if (!rows.length) {
+    return { text: `No hunting places in the catalog suit a level ${args.level} ${vocation}.`, isError: false };
+  }
+  return { text: joinLines([...rows.map(renderHunt), rows[0].attribution]), isError: false };
 }

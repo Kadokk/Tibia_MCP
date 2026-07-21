@@ -130,7 +130,7 @@ startProfileSyncScheduler(profileSync, { tickMs: env.profileSyncTickMs });
 
 // The tool router binds the Discord user id (and tier) at dispatch time — the id
 // is never a model-visible parameter — and satisfies runAsk's mcp.callTool dep.
-const router = createToolRouter({ mcp, memory, captures, quests, questEligibility });
+const router = createToolRouter({ mcp, memory, captures, quests, questEligibility, catalog });
 
 // ONE merged tool list: MCP defs then local defs, fetched once at startup so every
 // request advertises the same tools across users, tiers, and questions.

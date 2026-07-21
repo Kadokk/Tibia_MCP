@@ -11,6 +11,44 @@ const QUEST = {
   attribution: 'Content from TibiaWiki (tibia.fandom.com), CC BY-SA.', source_revision: 842642
 };
 
+const ATTRIB = 'Content from TibiaWiki (tibia.fandom.com), CC BY-SA 3.0.';
+
+const ITEM_ROW = {
+  id: 1, slug: 'plate-armor', title: 'Plate Armor', game_item_id: 3357, object_class: 'Body Equipment',
+  primary_type: 'Armors', slot: 'Body', level_required: null, vocation: null, weight: '120.00',
+  attack: null, defense: null, armor: 10, npc_buy_price: 1200, npc_sell_price: 400,
+  market_value_low: 400, market_value_high: 800, marketable: true, stackable: false, pickupable: true,
+  actual_name: 'plate armor', plural: null, aliases: ['plate armor', 'pa'], attributes: {},
+  wiki_url: 'https://tibia.fandom.com/wiki/Plate_Armor', attribution: ATTRIB, source_revision: '1147293'
+};
+const CREATURE_ROW = {
+  id: 2, slug: 'demon', title: 'Demon', hp: 8200, exp: 6000, armor: 44, mitigation: '2.76',
+  bestiary_class: 'Demon', bestiary_level: 'Hard', occurrence: 'Common', is_boss: false,
+  creature_class: 'Demons', primary_type: 'Demons', spawn_type: 'Regular', summon_cost: null,
+  convince_cost: null, abilities: [{ name: 'Great Fireball', range: '150-250', element: 'fire' }],
+  resistances: { fire: 0, holy: 112 }, max_damage: { fire: 250 },
+  loot: [{ item: 'Demon Horn', amount: null, rarity: 'uncommon' }], locations: ['Hero Cave'],
+  attributes: {}, wiki_url: 'https://tibia.fandom.com/wiki/Demon', attribution: ATTRIB, source_revision: '1191652'
+};
+const SPELL_ROW = {
+  id: 3, slug: 'ultimate-healing', title: 'Ultimate Healing', words: 'exura vita',
+  spell_class: 'Instant', subclass: 'Healing', vocations: ['Druid', 'Sorcerer'], level_required: 30,
+  mana: 160, premium: false, cooldown: '1', effect: 'Restores health.', attributes: {},
+  wiki_url: 'https://tibia.fandom.com/wiki/Ultimate_Healing', attribution: ATTRIB, source_revision: '1182931'
+};
+const NPC_ROW = {
+  id: 4, slug: 'rashid', title: 'Rashid', job: 'Merchant', city: 'Svargrond',
+  location: 'Travels around.', buysell: true, attributes: {},
+  wiki_url: 'https://tibia.fandom.com/wiki/Rashid', attribution: ATTRIB, source_revision: '1097793'
+};
+const HUNT_ROW = {
+  id: 5, slug: 'ab-dendriel-elf-cave', title: "Ab'Dendriel Elf Cave", city: "Ab'Dendriel",
+  location: 'North-west.', vocations: 'All vocations.', level_knights: 20, level_paladins: 20,
+  level_mages: 25, loot_rating: 'Bad', loot_stars: 2, exp_rating: 'Bad', exp_stars: 2,
+  best_loot: ['Wand of Cosmic Energy'], creatures: ['Snake', 'Elf'], attributes: {},
+  wiki_url: "https://tibia.fandom.com/wiki/Ab'Dendriel_Elf_Cave", attribution: ATTRIB, source_revision: '748264'
+};
+
 function makeRouter(over: Record<string, unknown> = {}) {
   const deps = {
     mcp: { callTool: vi.fn().mockResolvedValue({ text: 'mcp result', isError: false }) },
@@ -22,14 +60,26 @@ function makeRouter(over: Record<string, unknown> = {}) {
     captures: { append: vi.fn().mockResolvedValue(undefined) },
     quests: { findByNameLoose: vi.fn().mockResolvedValue(QUEST) },
     questEligibility: { check: vi.fn().mockResolvedValue({ kind: 'ok', eligible: true, reasons: [], quest: QUEST }) },
+    catalog: {
+      findItemLoose: vi.fn().mockResolvedValue(ITEM_ROW),
+      findItems: vi.fn().mockResolvedValue([ITEM_ROW]),
+      findCreatureLoose: vi.fn().mockResolvedValue(CREATURE_ROW),
+      findSpellLoose: vi.fn().mockResolvedValue(SPELL_ROW),
+      findNpcLoose: vi.fn().mockResolvedValue(NPC_ROW),
+      findHuntingPlaces: vi.fn().mockResolvedValue([HUNT_ROW])
+    },
     ...over
   };
   return { deps, router: createToolRouter(deps as never) };
 }
 
 describe('localToolDefs', () => {
-  it('declares all four local tools in stable order, none exposing a user id', () => {
-    expect(localToolDefs.map((t) => t.name)).toEqual(['remember', 'recall_memory', 'get_quest_info', 'check_quest_eligibility']);
+  it('declares every local tool in stable order, none exposing a user id', () => {
+    expect(localToolDefs.map((t) => t.name)).toEqual([
+      'remember', 'recall_memory', 'get_quest_info', 'check_quest_eligibility',
+      'get_item_info', 'find_items', 'get_creature_info', 'get_spell_info',
+      'get_npc_info', 'find_hunting_places'
+    ]);
     for (const def of localToolDefs) expect(JSON.stringify(def.inputSchema)).not.toMatch(/user/i);
   });
 });
@@ -127,5 +177,216 @@ describe('createToolRouter', () => {
     const r = await router.bind('u1', 'pro').callTool('check_quest_eligibility', { quest: 'Inquisition' });
     expect(r.isError).toBe(false);
     expect(r.text).toContain('/link');
+  });
+});
+
+describe('catalog tools', () => {
+  const CATALOG_TOOLS = [
+    'get_item_info', 'find_items', 'get_creature_info',
+    'get_spell_info', 'get_npc_info', 'find_hunting_places'
+  ];
+
+  it('declares a schema for each catalog tool with a required argument', () => {
+    for (const name of CATALOG_TOOLS) {
+      const def = localToolDefs.find((t) => t.name === name);
+      expect(def, `${name} must be declared`).toBeDefined();
+      const schema = def!.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
+      expect(schema.required?.length, `${name} needs a required arg`).toBeGreaterThan(0);
+      expect(JSON.stringify(schema)).not.toMatch(/user/i);
+    }
+  });
+
+  it('looks an item up loosely and renders its stats', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'plate armor' });
+
+    expect((deps.catalog as never as { findItemLoose: ReturnType<typeof vi.fn> }).findItemLoose)
+      .toHaveBeenCalledWith('plate armor');
+    expect(r.text).toContain('Plate Armor');
+    expect(r.text).toContain('10');       // armor
+    expect(r.isError).toBe(false);
+  });
+
+  it('renders creature loot, abilities and resistances', async () => {
+    const { router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_creature_info', { creature: 'demon' });
+
+    expect(r.text).toContain('Demon');
+    expect(r.text).toContain('8200');
+    expect(r.text).toContain('Great Fireball');
+    expect(r.text).toContain('Demon Horn');
+    expect(r.text).toContain('fire');     // 0% fire resistance is meaningful
+  });
+
+  it('renders spell words, mana and vocations', async () => {
+    const { router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_spell_info', { spell: 'exura vita' });
+
+    expect(r.text).toContain('exura vita');
+    expect(r.text).toContain('160');
+    expect(r.text).toContain('Druid');
+  });
+
+  it('renders npc job, city and location', async () => {
+    const { router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_npc_info', { npc: 'rashid' });
+
+    expect(r.text).toContain('Rashid');
+    expect(r.text).toContain('Merchant');
+    expect(r.text).toContain('Svargrond');
+  });
+
+  it('lists items matching a filter', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { search: 'armor', object_class: 'Body Equipment' });
+
+    expect((deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems)
+      .toHaveBeenCalledWith(expect.objectContaining({ search: 'armor', objectClass: 'Body Equipment' }));
+  });
+
+  it('lists hunting places for a level and vocation', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('find_hunting_places', { level: 30, vocation: 'knight' });
+
+    expect((deps.catalog as never as { findHuntingPlaces: ReturnType<typeof vi.fn> }).findHuntingPlaces)
+      .toHaveBeenCalledWith(expect.objectContaining({ level: 30, vocation: 'knight' }));
+    expect(r.text).toContain("Ab'Dendriel Elf Cave");
+    expect(r.text).toContain('20');   // knight level recommendation
+  });
+});
+
+describe('catalog tools — attribution', () => {
+  // CC BY-SA requires the notice to travel with the content, so every rendered
+  // result carries it, lists included.
+  it('includes the attribution notice in every catalog result', async () => {
+    const { router } = makeRouter();
+    const bound = router.bind('u1', 'free');
+    const calls: Array<[string, Record<string, unknown>]> = [
+      ['get_item_info', { item: 'plate armor' }],
+      ['find_items', { search: 'armor' }],
+      ['get_creature_info', { creature: 'demon' }],
+      ['get_spell_info', { spell: 'exura vita' }],
+      ['get_npc_info', { npc: 'rashid' }],
+      ['find_hunting_places', { level: 30, vocation: 'knight' }]
+    ];
+
+    for (const [name, args] of calls) {
+      const r = await bound.callTool(name, args);
+      expect(r.text, `${name} must carry attribution`).toContain('TibiaWiki');
+      expect(r.text, `${name} must carry attribution`).toContain('CC BY-SA');
+    }
+  });
+});
+
+describe('catalog tools — not found', () => {
+  const NOT_FOUND = {
+    get_item_info: { item: 'nonsense' },
+    get_creature_info: { creature: 'nonsense' },
+    get_spell_info: { spell: 'nonsense' },
+    get_npc_info: { npc: 'nonsense' }
+  } as const;
+
+  it('returns a helpful not-in-catalog message rather than an error', async () => {
+    for (const [name, args] of Object.entries(NOT_FOUND)) {
+      const { router } = makeRouter({
+        catalog: {
+          findItemLoose: vi.fn().mockResolvedValue(null),
+          findItems: vi.fn().mockResolvedValue([]),
+          findCreatureLoose: vi.fn().mockResolvedValue(null),
+          findSpellLoose: vi.fn().mockResolvedValue(null),
+          findNpcLoose: vi.fn().mockResolvedValue(null),
+          findHuntingPlaces: vi.fn().mockResolvedValue([])
+        }
+      });
+      const r = await router.bind('u1', 'free').callTool(name, args);
+
+      expect(r.isError, `${name} must not be an error`).toBe(false);
+      // The message names which catalog, e.g. "not in the item catalog".
+      expect(r.text).toMatch(/not in the \w+ catalog/i);
+      expect(r.text).toContain('nonsense');
+    }
+  });
+
+  it('says so plainly when a listing matches nothing', async () => {
+    const { router } = makeRouter({
+      catalog: {
+        findItemLoose: vi.fn(), findItems: vi.fn().mockResolvedValue([]),
+        findCreatureLoose: vi.fn(), findSpellLoose: vi.fn(), findNpcLoose: vi.fn(),
+        findHuntingPlaces: vi.fn().mockResolvedValue([])
+      }
+    });
+    const bound = router.bind('u1', 'free');
+
+    expect((await bound.callTool('find_items', { search: 'x' })).text).toMatch(/no items/i);
+    expect((await bound.callTool('find_hunting_places', { level: 8, vocation: 'knight' })).text)
+      .toMatch(/no hunting places/i);
+  });
+});
+
+describe('catalog tools — caps', () => {
+  it('caps find_items at ten results however large a limit is asked for', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { search: 'a', limit: 500 });
+
+    const { limit } = (deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0];
+    expect(limit).toBe(10);
+  });
+
+  it('caps find_hunting_places at five results', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_hunting_places', { level: 30, vocation: 'knight', limit: 99 });
+
+    const { limit } = (deps.catalog as never as { findHuntingPlaces: ReturnType<typeof vi.fn> }).findHuntingPlaces.mock.calls[0][0];
+    expect(limit).toBe(5);
+  });
+
+  it('honours a smaller limit than the cap', async () => {
+    const { deps, router } = makeRouter();
+    await router.bind('u1', 'free').callTool('find_items', { search: 'a', limit: 2 });
+
+    expect((deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0].limit).toBe(2);
+  });
+
+  it('falls back to the cap when no limit is given or it is nonsense', async () => {
+    for (const args of [{ search: 'a' }, { search: 'a', limit: 'lots' }, { search: 'a', limit: -3 }]) {
+      const { deps, router } = makeRouter();
+      await router.bind('u1', 'free').callTool('find_items', args);
+      expect((deps.catalog as never as { findItems: ReturnType<typeof vi.fn> }).findItems.mock.calls[0][0].limit).toBe(10);
+    }
+  });
+});
+
+describe('catalog tools — tier independence', () => {
+  // Catalog data is public wiki content. It routes before the premium gate, so a
+  // free user must get the same answer, and the advertised tool list is one module
+  // constant shared by every tier.
+  it('answers identically on the free and premium tiers', async () => {
+    const names: Array<[string, Record<string, unknown>]> = [
+      ['get_item_info', { item: 'plate armor' }],
+      ['get_creature_info', { creature: 'demon' }],
+      ['get_spell_info', { spell: 'exura vita' }],
+      ['get_npc_info', { npc: 'rashid' }],
+      ['find_items', { search: 'armor' }],
+      ['find_hunting_places', { level: 30, vocation: 'knight' }]
+    ];
+
+    for (const [name, args] of names) {
+      const free = await makeRouter().router.bind('u1', 'free').callTool(name, args);
+      const pro = await makeRouter().router.bind('u2', 'pro').callTool(name, args);
+      expect(free.text, `${name} must not differ by tier`).toBe(pro.text);
+      expect(free.text).not.toContain(PREMIUM_MEMORY_MESSAGE);
+    }
+  });
+
+  it('never shows the premium upsell for a catalog tool on the free tier', async () => {
+    const { router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('get_item_info', { item: 'plate armor' });
+
+    expect(r.text).not.toBe(PREMIUM_MEMORY_MESSAGE);
+  });
+
+  it('advertises a byte-identical tool list regardless of tier', () => {
+    expect(JSON.stringify(localToolDefs)).toBe(JSON.stringify(localToolDefs));
+    expect(localToolDefs.filter((t) => t.name.startsWith('get_') || t.name.startsWith('find_'))).toHaveLength(7);
   });
 });
