@@ -14,6 +14,7 @@ import { startRefreshScheduler } from './scheduler/refreshScheduler';
 import { startProfileSyncScheduler } from './scheduler/profileSyncScheduler';
 import { startDistillScheduler } from './scheduler/distillScheduler';
 import { startQuestImportScheduler } from './scheduler/questImportScheduler';
+import { startCatalogImportScheduler } from './scheduler/catalogImportScheduler';
 import { createTibiaDataClient } from './sources/tibiaDataClient';
 import { AccessLimitsService } from './services/accessLimits';
 import { UsageRepository } from './repositories/usageRepository';
@@ -34,6 +35,9 @@ import { QuestEligibilityService } from './services/questEligibilityService';
 import { QuestSeedService } from './services/questSeedService';
 import { QUEST_LINE_LABEL_MAP } from './services/questLineLabelMap';
 import { WikiQuestImporter, WIKI_USER_AGENT } from './importers/wikiQuestImporter';
+import { WikiApiClient } from './importers/wikiApiClient';
+import { WikiCatalogImporter } from './importers/wikiCatalogImporter';
+import { CatalogRepository } from './repositories/catalogRepository';
 import type { Tier } from './services/tiers';
 import { createDiscordClient, startDiscordBot } from './discord/createClient';
 import { createInteractionDispatcher } from './discord/interactionDispatcher';
@@ -99,6 +103,24 @@ const questImporter = new WikiQuestImporter({
   spendCapUsdMicros: Math.round(env.aiDailySpendCapUsd * 1_000_000)
 });
 startQuestImportScheduler(questImporter, { tickMs: env.questImportTickMs, enabled: env.questImportEnabled });
+
+// Catalog corpus: zero model calls, so no ai/usage deps. Its scheduler waits out a
+// fixed delay before the first sweep rather than kicking at boot.
+const catalog = new CatalogRepository(db);
+const catalogImporter = new WikiCatalogImporter({
+  wiki: new WikiApiClient({
+    http: {
+      getJson: (url) =>
+        fetch(url, { headers: { 'user-agent': WIKI_USER_AGENT } }).then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
+        )
+    },
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  }),
+  catalog,
+  runs: importRuns
+});
+startCatalogImportScheduler(catalogImporter, { tickMs: env.catalogImportTickMs, enabled: env.catalogImportEnabled });
 
 const context = new PlayerContextService({ snapshots, settings, tiers, memory, captures, quests });
 const linkService = new LinkService({ tibiaData, links: linkedChars, tiers });

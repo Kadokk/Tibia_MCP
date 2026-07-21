@@ -18,7 +18,10 @@ const envSchema = z.object({
   PROFILE_SYNC_TICK_MS: z.coerce.number().int().positive().default(300_000),
   DISTILL_TICK_MS: z.coerce.number().int().positive().default(300_000),
   QUEST_IMPORT_TICK_MS: z.coerce.number().int().positive().default(604_800_000),
-  QUEST_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false')
+  QUEST_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false'),
+  // Safe defaults: weekly, on. A deploy needs no .env change to pick the catalog up.
+  CATALOG_IMPORT_TICK_MS: z.coerce.number().int().positive().default(604_800_000),
+  CATALOG_IMPORT_ENABLED: z.string().default('true').transform((v) => v !== 'false')
 });
 
 export type AppEnv = {
@@ -38,6 +41,8 @@ export type AppEnv = {
   distillTickMs: number;
   questImportTickMs: number;
   questImportEnabled: boolean;
+  catalogImportTickMs: number;
+  catalogImportEnabled: boolean;
 };
 
 export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
@@ -58,6 +63,8 @@ export function parseEnv(input: NodeJS.ProcessEnv): AppEnv {
     profileSyncTickMs: parsed.PROFILE_SYNC_TICK_MS,
     distillTickMs: parsed.DISTILL_TICK_MS,
     questImportTickMs: parsed.QUEST_IMPORT_TICK_MS,
-    questImportEnabled: parsed.QUEST_IMPORT_ENABLED
+    questImportEnabled: parsed.QUEST_IMPORT_ENABLED,
+    catalogImportTickMs: parsed.CATALOG_IMPORT_TICK_MS,
+    catalogImportEnabled: parsed.CATALOG_IMPORT_ENABLED
   };
 }

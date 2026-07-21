@@ -69,6 +69,13 @@ describe('parseEnv', () => {
     expect(parseEnv(inlineValidEnvObject).questImportTickMs).toBe(604_800_000);
     expect(parseEnv(inlineValidEnvObject).questImportEnabled).toBe(true);
   });
+  it('defaults CATALOG_IMPORT_TICK_MS to 7 days and CATALOG_IMPORT_ENABLED to true', () => {
+    expect(parseEnv(inlineValidEnvObject).catalogImportTickMs).toBe(604_800_000);
+    expect(parseEnv(inlineValidEnvObject).catalogImportEnabled).toBe(true);
+  });
+  it('parses CATALOG_IMPORT_ENABLED=false as a kill switch', () => {
+    expect(parseEnv({ ...inlineValidEnvObject, CATALOG_IMPORT_ENABLED: 'false' }).catalogImportEnabled).toBe(false);
+  });
   it('parses QUEST_IMPORT_ENABLED=false as a kill switch', () => {
     expect(parseEnv({ ...inlineValidEnvObject, QUEST_IMPORT_ENABLED: 'false' }).questImportEnabled).toBe(false);
   });
