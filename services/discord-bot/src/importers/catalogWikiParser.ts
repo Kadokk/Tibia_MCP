@@ -116,8 +116,11 @@ export function parseInfoboxParams(templateName: string, wikitext: string): Map<
     const ch = wikitext[i];
     if (ch === '{') brace++;
     else if (ch === '}') {
+      // The infobox's own '}}' closes it — break before either brace is captured,
+      // or the final param keeps a stray '}'.
+      if (brace === 2 && wikitext[i + 1] === '}') break;
       brace--;
-      if (brace === 0) break; // infobox closed
+      if (brace === 0) break;
     } else if (ch === '[') bracket++;
     else if (ch === ']') bracket--;
 
@@ -185,6 +188,287 @@ export function parseTradeList(raw: string | undefined, direction: TradeDirectio
 
 const wikiUrlFor = (title: string): string =>
   encodeURI(`https://tibia.fandom.com/wiki/${title.replace(/ /g, '_')}`);
+
+// ---------------------------------------------------------------------------
+// Nested-template helpers (creature abilities, loot tables, damage breakdowns)
+// ---------------------------------------------------------------------------
+
+type TemplateCall = { name: string; positional: string[]; named: Map<string, string> };
+
+/** Walks from just past a '{{' to its matching '}}', returning the body and end index. */
+function balancedBody(text: string, start: number): { body: string; end: number } {
+  let brace = 2;
+  let i = start;
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') brace++;
+    else if (ch === '}') {
+      if (brace === 2 && text[i + 1] === '}') break;
+      brace--;
+      if (brace === 0) break;
+    }
+  }
+  return { body: text.slice(start, i), end: i + 2 };
+}
+
+/** Splits a template body on pipes that sit outside any nested braces or links. */
+function splitTopLevel(body: string): string[] {
+  const parts: string[] = [];
+  let brace = 0;
+  let bracket = 0;
+  let current = '';
+  for (const ch of body) {
+    if (ch === '{') brace++;
+    else if (ch === '}') brace--;
+    else if (ch === '[') bracket++;
+    else if (ch === ']') bracket--;
+    if (ch === '|' && brace === 0 && bracket === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/** Index of the first '=' outside any nested braces or links, or -1. */
+function topLevelEquals(part: string): number {
+  let brace = 0;
+  let bracket = 0;
+  for (let i = 0; i < part.length; i++) {
+    const ch = part[i];
+    if (ch === '{') brace++;
+    else if (ch === '}') brace--;
+    else if (ch === '[') bracket++;
+    else if (ch === ']') bracket--;
+    else if (ch === '=' && brace === 0 && bracket === 0) return i;
+  }
+  return -1;
+}
+
+function parseCall(body: string): TemplateCall {
+  const parts = splitTopLevel(body);
+  const positional: string[] = [];
+  const named = new Map<string, string>();
+  for (const part of parts.slice(1)) {
+    const eq = topLevelEquals(part);
+    if (eq === -1) positional.push(part.trim());
+    else named.set(part.slice(0, eq).trim().toLowerCase(), part.slice(eq + 1).trim());
+  }
+  return { name: parts[0].trim(), positional, named };
+}
+
+/** Every '{{Template|...}}' call at the top level of `raw` ('{{{param}}}' skipped). */
+function findTemplateCalls(raw: string): TemplateCall[] {
+  const calls: TemplateCall[] = [];
+  for (let i = 0; i < raw.length - 1; i++) {
+    if (raw[i] !== '{' || raw[i + 1] !== '{') continue;
+    if (raw[i + 2] === '{') { i += 2; continue; } // {{{template param}}}
+    const { body, end } = balancedBody(raw, i + 2);
+    calls.push(parseCall(body));
+    i = end - 1;
+  }
+  return calls;
+}
+
+const clean = (raw: string | undefined): string | null =>
+  raw === undefined || isUnknown(raw) ? null : raw.trim();
+
+/** [[Page]] and [[Page|display]] -> the target, de-duplicated in document order. */
+export function extractLinkTargets(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  for (const m of raw.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
+    const target = m[1].trim();
+    if (target) seen.add(target);
+  }
+  return [...seen];
+}
+
+// ---------------------------------------------------------------------------
+// Creatures
+// ---------------------------------------------------------------------------
+
+export type CreatureAbility = { name: string; range: string | null; element: string | null };
+export type LootEntry = { item: string; amount: string | null; rarity: string | null };
+
+export type CatalogCreatureRecord = {
+  slug: string;
+  title: string;
+  hp: number | null;
+  exp: number | null;
+  armor: number | null;
+  mitigation: number | null;
+  bestiaryClass: string | null;
+  bestiaryLevel: string | null;
+  occurrence: string | null;
+  isBoss: boolean | null;
+  creatureClass: string | null;
+  primaryType: string | null;
+  spawnType: string | null;
+  summonCost: number | null;
+  convinceCost: number | null;
+  abilities: CreatureAbility[];
+  resistances: Record<string, number>;
+  maxDamage: Record<string, number>;
+  loot: LootEntry[];
+  locations: string[];
+  attributes: Record<string, string>;
+  wikiUrl: string;
+  sourceRevision: number | null;
+};
+
+/** Infobox param name -> resistance key. */
+const RESISTANCE_PARAMS: Record<string, string> = {
+  physicaldmgmod: 'physical', earthdmgmod: 'earth', firedmgmod: 'fire',
+  deathdmgmod: 'death', energydmgmod: 'energy', holydmgmod: 'holy',
+  icedmgmod: 'ice', hpdraindmgmod: 'hpDrain', drowndmgmod: 'drown', healmod: 'heal'
+};
+
+const CREATURE_TYPED = new Set([
+  'hp', 'exp', 'armor', 'mitigation', 'summon', 'convince', 'creatureclass', 'primarytype',
+  'bestiaryclass', 'bestiarylevel', 'occurrence', 'spawntype', 'isboss', 'abilities',
+  'loot', 'location', 'maxdmg', ...Object.keys(RESISTANCE_PARAMS)
+]);
+
+/** bestiarytext and flavortext are CipSoft's own copy; the rest is bulk prose. */
+const CREATURE_EXCLUDE = new Set([
+  'bestiarytext', 'flavortext', 'notes', 'history', 'sounds', 'strategy',
+  'behaviour', 'list', 'getvalue', 'name'
+]);
+
+/**
+ * "{{Ability List |{{Melee|0-500}} |{{Ability|Great Fireball|150-250|fire|scene=...}}}}"
+ * -> one {name, range, element} per entry.
+ *
+ * Range and element arrive either positionally or as named params depending on the
+ * page, and `scene=` carries a nested {{Scene|...}} of pure rendering metadata that
+ * is dropped: only name/range/element are read out.
+ */
+export function parseAbilityList(raw: string | undefined): CreatureAbility[] {
+  if (!raw || isUnknown(raw)) return [];
+  const list = findTemplateCalls(raw)[0];
+  if (!list) return [];
+
+  const abilities: CreatureAbility[] = [];
+  for (const segment of list.positional) {
+    const call = findTemplateCalls(segment)[0];
+    if (!call) continue;
+    const kind = call.name.toLowerCase();
+    if (kind === 'ability') {
+      const name = clean(call.positional[0]);
+      if (!name) continue;
+      abilities.push({
+        name,
+        range: clean(call.positional[1]) ?? clean(call.named.get('range')),
+        element: clean(call.positional[2]) ?? clean(call.named.get('element'))
+      });
+    } else if (kind === 'summon') {
+      const summoned = clean(call.positional[0]);
+      abilities.push({ name: summoned ? `Summon ${summoned}` : 'Summon', range: null, element: null });
+    } else {
+      // Melee, Healing and friends: the template name is the ability itself.
+      abilities.push({
+        name: call.name,
+        range: clean(call.positional[0]) ?? clean(call.named.get('range')),
+        element: clean(call.positional[1]) ?? clean(call.named.get('element'))
+      });
+    }
+  }
+  return abilities;
+}
+
+/**
+ * "{{Loot Table |{{Loot Item|1-3|Great Mana Potion|common}} |{{Loot Item|Talon|semi-rare}}}}"
+ * -> {item, amount, rarity}. The amount is optional, so a leading numeric-looking
+ * param distinguishes "1-3, Great Mana Potion" from a bare item name.
+ */
+export function parseLootTable(raw: string | undefined): LootEntry[] {
+  if (!raw || isUnknown(raw)) return [];
+  const table = findTemplateCalls(raw)[0];
+  if (!table) return [];
+
+  const rows: LootEntry[] = [];
+  for (const segment of table.positional) {
+    const call = findTemplateCalls(segment)[0];
+    if (!call || call.name.toLowerCase() !== 'loot item') continue;
+    const p = call.positional;
+    const hasAmount = /^\d+(\s*-\s*\d+)?$/.test(p[0] ?? '');
+    const item = clean(hasAmount ? p[1] : p[0]);
+    if (!item) continue;
+    rows.push({
+      item,
+      amount: hasAmount ? p[0].trim() : null,
+      rarity: clean(hasAmount ? p[2] : p[1])
+    });
+  }
+  return rows;
+}
+
+function parseResistances(params: Map<string, string>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [param, key] of Object.entries(RESISTANCE_PARAMS)) {
+    // 0% is a real immunity, not a missing value — only '?' style values are dropped.
+    const pct = coerceInt(params.get(param));
+    if (pct !== null) out[key] = pct;
+  }
+  return out;
+}
+
+/** "{{Max Damage|physical=500|fire=250}}" -> {physical: 500, fire: 250}. */
+function parseMaxDamage(raw: string | undefined): Record<string, number> {
+  if (!raw || isUnknown(raw)) return {};
+  const call = findTemplateCalls(raw)[0];
+  if (!call) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of call.named) {
+    const n = coerceInt(v);
+    if (n !== null) out[k] = n;
+  }
+  return out;
+}
+
+/** Maps a Creature page to a typed record, or null if it carries no creature infobox. */
+export function mapCreature(title: string, wikitext: string, revid: number | null): CatalogCreatureRecord | null {
+  const params = parseInfoboxParams('Infobox Creature', wikitext);
+  if (params.size === 0) return null;
+
+  const get = (k: string): string | undefined => params.get(k);
+  const attributes: Record<string, string> = {};
+  for (const [k, v] of params) {
+    if (CREATURE_TYPED.has(k) || CREATURE_EXCLUDE.has(k)) continue;
+    if (!v || isUnknown(v) || v.length > 200) continue;
+    attributes[k] = v;
+  }
+
+  return {
+    slug: slugify(title),
+    title,
+    hp: coerceInt(get('hp')),
+    exp: coerceInt(get('exp')),
+    armor: coerceInt(get('armor')),
+    mitigation: coerceDecimal(get('mitigation')),
+    bestiaryClass: clean(get('bestiaryclass')),
+    bestiaryLevel: clean(get('bestiarylevel')),
+    occurrence: clean(get('occurrence')),
+    isBoss: coerceBool(get('isboss')),
+    creatureClass: clean(get('creatureclass')),
+    primaryType: clean(get('primarytype')),
+    spawnType: clean(get('spawntype')),
+    summonCost: coerceInt(get('summon')),
+    convinceCost: coerceInt(get('convince')),
+    abilities: parseAbilityList(get('abilities')),
+    resistances: parseResistances(params),
+    maxDamage: parseMaxDamage(get('maxdmg')),
+    loot: parseLootTable(get('loot')),
+    locations: extractLinkTargets(get('location')),
+    attributes,
+    wikiUrl: wikiUrlFor(title),
+    sourceRevision: revid
+  };
+}
 
 /** Maps an Object page to a typed item record, or null if it is not an item. */
 export function mapItem(title: string, wikitext: string, revid: number | null): CatalogItemRecord | null {

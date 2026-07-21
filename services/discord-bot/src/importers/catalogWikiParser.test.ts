@@ -6,9 +6,13 @@ import {
   coerceBool,
   coerceDecimal,
   coerceInt,
+  extractLinkTargets,
   isCatalogItem,
+  mapCreature,
   mapItem,
+  parseAbilityList,
   parseInfoboxParams,
+  parseLootTable,
   parseTradeList,
   parseValueRange
 } from './catalogWikiParser';
@@ -29,6 +33,7 @@ const FIRE = wikitextOf('catalog_object_nonitem.api.json');
 const DOLL = wikitextOf('catalog_object_edges.api.json', 'Doll');
 const SILVER_KEY = wikitextOf('catalog_object_edges.api.json', 'Silver Key');
 const RUNE = wikitextOf('catalog_batch.api.json', 'Great Fireball Rune');
+const DEMON = wikitextOf('catalog_creature_demon.api.json');
 
 const paramsOf = (wikitext: string) => parseInfoboxParams('Infobox Object', wikitext);
 
@@ -247,5 +252,164 @@ describe('mapItem', () => {
 
   it('always produces a wiki_url, which the schema requires to be NOT NULL', () => {
     expect(mapItem('Silver Key', SILVER_KEY, 1043652)?.wikiUrl).toBe('https://tibia.fandom.com/wiki/Silver_Key');
+  });
+});
+
+describe('extractLinkTargets', () => {
+  it('takes the link target, not the display text', () => {
+    expect(extractLinkTargets("[[Hero Cave]], [[Kharos|Ferumbras' Citadel]]")).toEqual(['Hero Cave', 'Kharos']);
+  });
+
+  it('ignores unlinked prose and de-duplicates', () => {
+    expect(extractLinkTargets('deep in [[Pits of Inferno]] (found in [[Pits of Inferno]])')).toEqual(['Pits of Inferno']);
+  });
+
+  it('returns an empty array when there are no links', () => {
+    expect(extractLinkTargets('somewhere unknown')).toEqual([]);
+  });
+});
+
+describe('parseAbilityList', () => {
+  const abilities = () => parseAbilityList(parseInfoboxParams('Infobox Creature', DEMON).get('abilities'));
+
+  it('reads a positional name/range/element ability', () => {
+    expect(abilities()).toContainEqual({ name: 'Great Fireball', range: '150-250', element: 'fire' });
+  });
+
+  it('reads an element supplied as a named param instead of positionally', () => {
+    expect(abilities()).toContainEqual({ name: 'Close-range Energy Strike', range: '210-300', element: 'energy' });
+  });
+
+  it('reads an ability that has an element but no range', () => {
+    expect(abilities()).toContainEqual({ name: 'Shoots Fire Field', range: null, element: 'fire field' });
+  });
+
+  it('treats an empty element param as null', () => {
+    expect(abilities()).toContainEqual({ name: 'Distance Paralyze', range: null, element: null });
+  });
+
+  it('names the bare Melee and Healing templates after the template itself', () => {
+    expect(abilities()).toContainEqual({ name: 'Melee', range: '0-500', element: null });
+    expect(abilities()).toContainEqual({ name: 'Healing', range: '80-250', element: null });
+  });
+
+  it('folds a summon into a readable ability name', () => {
+    expect(abilities()).toContainEqual({ name: 'Summon Fire Elemental', range: null, element: null });
+  });
+
+  // scene= carries a deeply nested {{Scene|...}} of pure rendering metadata.
+  it('drops scene payloads entirely', () => {
+    const serialized = JSON.stringify(abilities());
+
+    expect(serialized).not.toContain('Scene');
+    expect(serialized).not.toContain('spell=');
+    expect(serialized).not.toContain('missile');
+  });
+
+  it('returns an empty array for a creature with no abilities', () => {
+    expect(parseAbilityList(undefined)).toEqual([]);
+    expect(parseAbilityList('--')).toEqual([]);
+  });
+});
+
+describe('parseLootTable', () => {
+  const loot = () => parseLootTable(parseInfoboxParams('Infobox Creature', DEMON).get('loot'));
+
+  it('reads an entry that carries an amount range', () => {
+    expect(loot()).toContainEqual({ item: 'Great Mana Potion', amount: '1-3', rarity: 'common' });
+    expect(loot()).toContainEqual({ item: 'Gold Coin', amount: '1-200', rarity: 'common' });
+  });
+
+  it('reads an entry with no amount, where the first param is the item name', () => {
+    expect(loot()).toContainEqual({ item: 'Demon Horn', amount: null, rarity: 'uncommon' });
+    expect(loot()).toContainEqual({ item: 'Demon Trophy', amount: null, rarity: 'very rare' });
+  });
+
+  it('reads every row of the table', () => {
+    expect(loot()).toHaveLength(33);
+  });
+
+  it('returns an empty array when there is no loot table', () => {
+    expect(parseLootTable(undefined)).toEqual([]);
+  });
+});
+
+describe('mapCreature', () => {
+  const demon = () => mapCreature('Demon', DEMON, 1191652);
+
+  it('maps the headline stats', () => {
+    expect(demon()).toMatchObject({
+      slug: 'demon',
+      title: 'Demon',
+      hp: 8200,
+      exp: 6000,
+      armor: 44,
+      mitigation: 2.76,
+      bestiaryClass: 'Demon',
+      bestiaryLevel: 'Hard',
+      occurrence: 'Common',
+      creatureClass: 'Demons',
+      primaryType: 'Demons',
+      spawnType: 'Regular, Raid, Unblockable',
+      isBoss: false,
+      sourceRevision: 1191652,
+      wikiUrl: 'https://tibia.fandom.com/wiki/Demon'
+    });
+  });
+
+  it('reports an un-summonable creature as null rather than zero cost', () => {
+    expect(demon()?.summonCost).toBeNull();   // "--"
+    expect(demon()?.convinceCost).toBeNull();
+  });
+
+  it('maps resistance percentages, keeping a 0% immunity distinct from unknown', () => {
+    expect(demon()?.resistances).toMatchObject({
+      physical: 75, earth: 60, fire: 0, death: 80, energy: 50,
+      holy: 112, ice: 112, hpDrain: 0, drown: 0, heal: 100
+    });
+  });
+
+  it('maps the max damage breakdown', () => {
+    expect(demon()?.maxDamage).toMatchObject({
+      physical: 500, fire: 250, lifedrain: 480, energy: 300, manadrain: 120, summons: 250
+    });
+  });
+
+  it('extracts location link targets as a place array', () => {
+    const locations = demon()?.locations ?? [];
+
+    expect(locations).toContain('Hero Cave');
+    expect(locations).toContain('Goroma');
+    expect(locations).toContain('Pits of Inferno');
+    expect(locations).toContain('Kharos'); // [[Kharos|Ferumbras' Citadel]] -> target
+  });
+
+  it('carries abilities and loot through to the record', () => {
+    expect(demon()?.abilities).toContainEqual({ name: 'Great Fireball', range: '150-250', element: 'fire' });
+    expect(demon()?.loot).toContainEqual({ item: 'Demon Shield', amount: null, rarity: 'rare' });
+  });
+
+  // bestiarytext and flavortext are CipSoft's own copy — they must never be stored.
+  it('never imports CipSoft bestiary or flavor copy', () => {
+    const record = demon();
+
+    expect(record?.attributes).not.toHaveProperty('bestiarytext');
+    expect(record?.attributes).not.toHaveProperty('flavortext');
+    const serialized = JSON.stringify(record);
+    expect(serialized).not.toContain('most malevolent');   // a phrase from bestiarytext
+    expect(serialized).not.toContain('Apoc');
+  });
+
+  it('drops community prose and sound lists from the attributes bag', () => {
+    const attributes = demon()?.attributes ?? {};
+
+    expect(attributes).not.toHaveProperty('notes');
+    expect(attributes).not.toHaveProperty('history');
+    expect(attributes).not.toHaveProperty('sounds');
+    expect(attributes).toMatchObject({ speed: '128', paraimmune: 'yes' });
+  });
+
+  it('returns null for a page with no creature infobox', () => {
+    expect(mapCreature('Plate Armor', PLATE_ARMOR, 1)).toBeNull();
   });
 });
