@@ -148,9 +148,9 @@ Extract the quest importer's fetch/throttle/retry/UA into a shared client and ad
 
 Tables per Design invariants 5–7: `catalog_items` (typed: `game_item_id, object_class, primary_type, slot, level_required, vocation, weight NUMERIC, attack, defense, armor, npc_buy_price, npc_sell_price, market_value_low, market_value_high, marketable, stackable, pickupable, actual_name, plural, aliases JSONB, attributes JSONB` + standard columns; indexes: `lower(title)`, `lower(actual_name)`, GIN on `aliases`, `(object_class, level_required)`), `catalog_creatures` (`hp, exp, armor, mitigation, bestiary_class, bestiary_level, occurrence, is_boss, creature_class, primary_type, spawn_type, summon_cost, convince_cost, abilities JSONB, resistances JSONB, max_damage JSONB, loot JSONB, locations JSONB, attributes JSONB`; index `(exp)`), `catalog_spells` (`words, spell_class, subclass, vocations JSONB, level_required, mana, premium, cooldown NUMERIC, effect TEXT, attributes JSONB`; index `lower(words)`), `catalog_npcs` (`job, city, location TEXT, buysell BOOLEAN, attributes JSONB`; index `lower(city)`), `catalog_hunting_places` (`city, location TEXT, vocations TEXT, level_knights, level_paladins, level_mages, loot_rating, loot_stars, exp_rating, exp_stars, best_loot JSONB, creatures JSONB, attributes JSONB`; index `(level_knights)`), `catalog_npc_trade_offers` (per invariant 7), and `ALTER TABLE wiki_import_runs ADD COLUMN content_type TEXT NOT NULL DEFAULT 'quest'`.
 
-- [ ] **Step 1:** Write the SQL.
-- [ ] **Step 2:** Manual verification (Phase 4 style — unit tests stay fake-DbClient-only, never live-Postgres): apply 001→005 against a fresh `tibiaedge_smoke`; assert key tables/columns/indexes/constraints via `psql \d`.
-- [ ] **Step 3:** Typecheck/lint green (no TS in this task; vitest suite unaffected).
+- [x] **Step 1:** Write the SQL.
+- [x] **Step 2:** Manual verification (Phase 4 style — unit tests stay fake-DbClient-only, never live-Postgres): apply 001→005 against a fresh `tibiaedge_smoke`; assert key tables/columns/indexes/constraints via `psql \d`.
+- [x] **Step 3:** Typecheck/lint green (no TS in this task; vitest suite unaffected).
 
 **Exit:** fresh-DB apply of 001→005 verified on the smoke DB. **Commit:** `feat(db): migration 005 wiki catalog tables (Task 3)`
 
