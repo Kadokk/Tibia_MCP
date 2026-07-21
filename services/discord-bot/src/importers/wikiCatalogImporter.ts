@@ -1,11 +1,4 @@
-import {
-  mapCreature,
-  mapHuntingPlace,
-  mapItem,
-  mapNpc,
-  mapSpell,
-  type CatalogItemRecord
-} from './catalogWikiParser';
+import { mapCreature, mapHuntingPlace, mapItem, mapNpc, mapSpell } from './catalogWikiParser';
 import { resolveAliasSeed } from './itemAliases';
 import type { CatalogRepository } from '../repositories/catalogRepository';
 import type { WikiImportRunRepository } from '../repositories/wikiImportRunRepository';
@@ -28,8 +21,8 @@ export type CatalogImportSummary = {
 };
 
 type CatalogRepo = Pick<CatalogRepository,
-  'getRevisionMap' | 'upsertItem' | 'upsertCreature' | 'upsertSpell' | 'upsertNpc'
-  | 'upsertHuntingPlace' | 'rebuildTradeOffersForItem' | 'mergeItemAliases'>;
+  'getRevisionMap' | 'upsertItemWithTradeOffers' | 'upsertCreature' | 'upsertSpell'
+  | 'upsertNpc' | 'upsertHuntingPlace' | 'mergeItemAliases'>;
 
 type TypeConfig = {
   template: string;
@@ -42,7 +35,9 @@ const TYPES: Record<CatalogImportType, TypeConfig> = {
   item: {
     template: 'Template:Infobox_Object',
     map: mapItem,
-    upsert: (catalog, record) => catalog.upsertItem(record)
+    // Item and offers land in one statement: see upsertItemWithTradeOffers for why
+    // splitting them could strand a page at a revision it never fully imported.
+    upsert: (catalog, record) => catalog.upsertItemWithTradeOffers(record)
   },
   creature: {
     template: 'Template:Infobox_Creature',
@@ -121,10 +116,9 @@ export class WikiCatalogImporter {
             continue;
           }
 
-          const id = await config.upsert(this.deps.catalog, record as never);
-          if (contentType === 'item') {
-            await this.deps.catalog.rebuildTradeOffersForItem(id, (record as CatalogItemRecord).tradeOffers);
-          }
+          // Exactly one write per page, whatever the content type: a page either
+          // imports completely or not at all, so a failure can always be retried.
+          await config.upsert(this.deps.catalog, record as never);
           pagesUpdated++;
         } catch (err) {
           // A string, never the error object: an error can carry request context.

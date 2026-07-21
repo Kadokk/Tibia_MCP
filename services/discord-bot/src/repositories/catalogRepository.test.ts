@@ -45,29 +45,6 @@ const HUNT = {
 };
 
 describe('CatalogRepository — upserts', () => {
-  it('upserts an item by slug and returns its id', async () => {
-    const db = fakeDb([{ id: 42 }]);
-    const id = await repo(db).upsertItem(ITEM);
-
-    expect(id).toBe(42);
-    const [sql, params] = db.query.mock.calls[0];
-    expect(sql).toContain('INSERT INTO catalog_items');
-    expect(sql).toContain('ON CONFLICT (slug) DO UPDATE');
-    expect(sql).toContain('active = TRUE');
-    expect(sql).toContain('updated_at = now()');
-    expect(params[0]).toBe('plate-armor');
-    expect(params).toContain(3357);
-    expect(params).toContain('https://tibia.fandom.com/wiki/Plate_Armor');
-  });
-
-  it('serializes item json columns rather than passing raw objects', async () => {
-    const db = fakeDb([{ id: 1 }]);
-    await repo(db).upsertItem({ ...ITEM, attributes: { implemented: '3.0' } });
-
-    const params = db.query.mock.calls[0][1] as unknown[];
-    expect(params).toContain(JSON.stringify({ implemented: '3.0' }));
-  });
-
   it('upserts a creature with its json payloads serialized', async () => {
     const db = fakeDb([{ id: 9 }]);
     const id = await repo(db).upsertCreature(CREATURE);
@@ -144,83 +121,6 @@ describe('CatalogRepository — getRevisionMap', () => {
       await repo(db).getRevisionMap(type);
       expect(db.query.mock.calls[0][0]).toContain(`FROM ${table}`);
     }
-  });
-});
-
-describe('CatalogRepository — rebuildTradeOffersForItem', () => {
-  const offers = [
-    { npcName: 'Azil', direction: 'npc_sells' as const, price: null },
-    { npcName: 'H.L.', direction: 'npc_buys' as const, price: 110 }
-  ];
-
-  it('runs as a single data-modifying CTE, not a delete followed by an insert', async () => {
-    const db = fakeDb([]);
-    await repo(db).rebuildTradeOffersForItem(42, offers);
-
-    expect(db.query).toHaveBeenCalledTimes(1);
-    const sql = db.query.mock.calls[0][0] as string;
-    expect(sql).toContain('WITH');
-    expect(sql).toContain('DELETE FROM catalog_npc_trade_offers');
-    expect(sql).toContain('INSERT INTO catalog_npc_trade_offers');
-  });
-
-  // Deleting every row and re-inserting in one statement makes the doomed rows
-  // visible to ON CONFLICT; pruning only what is absent avoids the overlap.
-  it('prunes only offers absent from the incoming set', async () => {
-    const db = fakeDb([]);
-    await repo(db).rebuildTradeOffersForItem(42, offers);
-
-    const sql = db.query.mock.calls[0][0] as string;
-    expect(sql).toContain('NOT EXISTS');
-    expect(sql).toContain('ON CONFLICT (item_id, npc_name, direction) DO UPDATE');
-  });
-
-  it('passes the item id and the offers as a single jsonb payload', async () => {
-    const db = fakeDb([]);
-    await repo(db).rebuildTradeOffersForItem(42, offers);
-
-    const params = db.query.mock.calls[0][1] as unknown[];
-    expect(params[0]).toBe(42);
-    expect(params[1]).toBe(JSON.stringify([
-      { npc_name: 'Azil', direction: 'npc_sells', price: null },
-      { npc_name: 'H.L.', direction: 'npc_buys', price: 110 }
-    ]));
-  });
-
-  // Postgres rejects an ON CONFLICT DO UPDATE whose payload repeats a constrained
-  // key: "cannot affect row a second time". That would abort the page mid-import,
-  // so the repository must not depend on its caller having de-duplicated.
-  it('collapses duplicate npc/direction pairs, keeping the last price', async () => {
-    const db = fakeDb([]);
-    await repo(db).rebuildTradeOffersForItem(42, [
-      { npcName: 'H.L.', direction: 'npc_buys', price: 110 },
-      { npcName: 'Azil', direction: 'npc_sells', price: null },
-      { npcName: 'H.L.', direction: 'npc_buys', price: 400 }
-    ]);
-
-    const payload = JSON.parse((db.query.mock.calls[0][1] as unknown[])[1] as string);
-    expect(payload).toEqual([
-      { npc_name: 'H.L.', direction: 'npc_buys', price: 400 },
-      { npc_name: 'Azil', direction: 'npc_sells', price: null }
-    ]);
-  });
-
-  it('keeps the same npc as two offers when the directions differ', async () => {
-    const db = fakeDb([]);
-    await repo(db).rebuildTradeOffersForItem(42, [
-      { npcName: 'Rashid', direction: 'npc_buys', price: 400 },
-      { npcName: 'Rashid', direction: 'npc_sells', price: 500 }
-    ]);
-
-    expect(JSON.parse((db.query.mock.calls[0][1] as unknown[])[1] as string)).toHaveLength(2);
-  });
-
-  it('still clears existing offers when the incoming set is empty', async () => {
-    const db = fakeDb([]);
-    await repo(db).rebuildTradeOffersForItem(42, []);
-
-    expect(db.query).toHaveBeenCalledTimes(1);
-    expect(db.query.mock.calls[0][1]).toEqual([42, '[]']);
   });
 });
 
@@ -482,5 +382,93 @@ describe('CatalogRepository — trade offers', () => {
     await repo(db).findTradeOffersForNpc('Rashid');
 
     expect(db.query.mock.calls[0][0]).toContain('i.active');
+  });
+});
+
+describe('CatalogRepository — upsertItemWithTradeOffers', () => {
+  const REC = { ...ITEM, tradeOffers: [
+    { npcName: 'Rashid', direction: 'npc_buys' as const, price: 400 },
+    { npcName: 'Azil', direction: 'npc_sells' as const, price: null }
+  ] };
+
+  /**
+   * Task 15 follow-up. Upserting the item and rebuilding its offers as two
+   * statements let the first commit while the second threw: source_revision
+   * advanced to the new revid while the offers stayed stale, and the next run's
+   * revid gate then skipped the page as unchanged — permanently. DbClient exposes
+   * only query() and pg.Pool hands out a different connection per call, so a
+   * single statement is the only atomicity primitive available.
+   */
+  it('writes the item and its offers in one statement', async () => {
+    const db = fakeDb([{ id: 42 }]);
+    const id = await repo(db).upsertItemWithTradeOffers(REC);
+
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(id).toBe(42);
+    const sql = db.query.mock.calls[0][0] as string;
+    expect(sql).toContain('INSERT INTO catalog_items');
+    expect(sql).toContain('ON CONFLICT (slug) DO UPDATE');
+    expect(sql).toContain('DELETE FROM catalog_npc_trade_offers');
+    expect(sql).toContain('INSERT INTO catalog_npc_trade_offers');
+  });
+
+  it('returns the item id even when there are no offers to insert', async () => {
+    const db = fakeDb([{ id: 7 }]);
+
+    // The final statement must be a SELECT over the upsert, not the offer INSERT:
+    // an empty payload inserts no rows and would return nothing to RETURNING.
+    expect(await repo(db).upsertItemWithTradeOffers({ ...REC, tradeOffers: [] })).toBe(7);
+    expect(db.query.mock.calls[0][0]).toContain('SELECT id FROM upserted');
+  });
+
+  it('still clears every existing offer when the incoming set is empty', async () => {
+    const db = fakeDb([{ id: 1 }]);
+    await repo(db).upsertItemWithTradeOffers({ ...REC, tradeOffers: [] });
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('DELETE FROM catalog_npc_trade_offers');
+    expect((params as unknown[])[24]).toBe('[]');   // nothing survives the NOT EXISTS prune
+  });
+
+  it('still prunes only the offers absent from the incoming set', async () => {
+    const db = fakeDb([{ id: 1 }]);
+    await repo(db).upsertItemWithTradeOffers(REC);
+
+    const sql = db.query.mock.calls[0][0] as string;
+    expect(sql).toContain('NOT EXISTS');
+    expect(sql).toContain('ON CONFLICT (item_id, npc_name, direction) DO UPDATE');
+  });
+
+  it('passes the offers as one jsonb payload alongside the item columns', async () => {
+    const db = fakeDb([{ id: 1 }]);
+    await repo(db).upsertItemWithTradeOffers(REC);
+
+    const params = db.query.mock.calls[0][1] as unknown[];
+    expect(params[0]).toBe('plate-armor');
+    expect(params[params.length - 1]).toBe(JSON.stringify([
+      { npc_name: 'Rashid', direction: 'npc_buys', price: 400 },
+      { npc_name: 'Azil', direction: 'npc_sells', price: null }
+    ]));
+  });
+
+  // Carried over from rebuildTradeOffersForItem: a repeated constrained key is a
+  // hard Postgres error that would abort the page.
+  it('collapses duplicate npc/direction pairs, keeping the last price', async () => {
+    const db = fakeDb([{ id: 1 }]);
+    await repo(db).upsertItemWithTradeOffers({ ...REC, tradeOffers: [
+      { npcName: 'H.L.', direction: 'npc_buys', price: 110 },
+      { npcName: 'H.L.', direction: 'npc_buys', price: 400 }
+    ] });
+
+    const params = db.query.mock.calls[0][1] as unknown[];
+    expect(JSON.parse(params[params.length - 1] as string)).toEqual([
+      { npc_name: 'H.L.', direction: 'npc_buys', price: 400 }
+    ]);
+  });
+
+  it('does not leave a separate non-atomic path available', () => {
+    const r = repo(fakeDb([])) as unknown as Record<string, unknown>;
+    expect(r.rebuildTradeOffersForItem, 'the two-statement path is what caused the desync').toBeUndefined();
+    expect(r.upsertItem, 'a bare item upsert would skip the offer rebuild').toBeUndefined();
   });
 });

@@ -5,8 +5,7 @@ import type {
   CatalogItemRecord,
   CatalogNpcRecord,
   CatalogSpellRecord,
-  TradeDirection,
-  TradeOffer
+  TradeDirection
 } from '../importers/catalogWikiParser';
 
 export type CatalogContentType = 'item' | 'creature' | 'spell' | 'npc' | 'hunt';
@@ -106,35 +105,85 @@ function revisionMap(rows: Array<{ title: string; source_revision: string | null
 export class CatalogRepository {
   constructor(private readonly db: DbClient) {}
 
-  async upsertItem(r: CatalogItemRecord): Promise<number> {
+  /**
+   * Writes an item and its NPC trade offers in ONE statement.
+   *
+   * These used to be two calls, and a failure between them was unrecoverable:
+   * the item upsert committed the new source_revision, the offer rebuild threw,
+   * and the next run's revid gate then saw stored === live and skipped the page
+   * as unchanged — forever, with offers stuck at the previous revision's data.
+   * Reproduced against Postgres with an out-of-range offer price, the same class
+   * of value that broke the Naga Nest import.
+   *
+   * DbClient exposes only query(), and pg.Pool hands out a different connection
+   * per call, so BEGIN/COMMIT across calls is not available either. A single
+   * data-modifying CTE is the only atomicity primitive there is — the same
+   * reasoning memoryRepository records for its own history writes.
+   *
+   * The prune deletes only offers absent from the incoming set, keeping delete
+   * and upsert disjoint within the shared snapshot. The final SELECT reads the
+   * upsert rather than the offer INSERT so the id comes back even when an item
+   * has no offers at all.
+   */
+  async upsertItemWithTradeOffers(r: CatalogItemRecord): Promise<number> {
+    // Postgres rejects an ON CONFLICT DO UPDATE whose payload repeats a
+    // constrained key; callers happen to de-duplicate, this must not rely on it.
+    const unique = new Map<string, { npc_name: string; direction: string; price: number | null }>();
+    for (const o of r.tradeOffers) {
+      unique.set(`${o.npcName} ${o.direction}`,
+        { npc_name: o.npcName, direction: o.direction, price: o.price });
+    }
+
     const rows = await this.db.query<{ id: number }>(
-      `INSERT INTO catalog_items (slug, title, game_item_id, object_class, primary_type, slot,
-                                  level_required, vocation, weight, attack, defense, armor,
-                                  npc_buy_price, npc_sell_price, market_value_low, market_value_high,
-                                  marketable, stackable, pickupable, actual_name, plural,
-                                  attributes, wiki_url, source_revision)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-               $19, $20, $21, $22, $23, $24)
-       ON CONFLICT (slug) DO UPDATE SET
-         title = EXCLUDED.title, game_item_id = EXCLUDED.game_item_id,
-         object_class = EXCLUDED.object_class, primary_type = EXCLUDED.primary_type,
-         slot = EXCLUDED.slot, level_required = EXCLUDED.level_required,
-         vocation = EXCLUDED.vocation, weight = EXCLUDED.weight, attack = EXCLUDED.attack,
-         defense = EXCLUDED.defense, armor = EXCLUDED.armor,
-         npc_buy_price = EXCLUDED.npc_buy_price, npc_sell_price = EXCLUDED.npc_sell_price,
-         market_value_low = EXCLUDED.market_value_low, market_value_high = EXCLUDED.market_value_high,
-         marketable = EXCLUDED.marketable, stackable = EXCLUDED.stackable,
-         pickupable = EXCLUDED.pickupable, actual_name = EXCLUDED.actual_name,
-         plural = EXCLUDED.plural, attributes = EXCLUDED.attributes,
-         wiki_url = EXCLUDED.wiki_url, source_revision = EXCLUDED.source_revision,
-         active = TRUE, updated_at = now()
-       RETURNING id`,
+      `WITH upserted AS (
+         INSERT INTO catalog_items (slug, title, game_item_id, object_class, primary_type, slot,
+                                    level_required, vocation, weight, attack, defense, armor,
+                                    npc_buy_price, npc_sell_price, market_value_low, market_value_high,
+                                    marketable, stackable, pickupable, actual_name, plural,
+                                    attributes, wiki_url, source_revision)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                 $19, $20, $21, $22, $23, $24)
+         ON CONFLICT (slug) DO UPDATE SET
+           title = EXCLUDED.title, game_item_id = EXCLUDED.game_item_id,
+           object_class = EXCLUDED.object_class, primary_type = EXCLUDED.primary_type,
+           slot = EXCLUDED.slot, level_required = EXCLUDED.level_required,
+           vocation = EXCLUDED.vocation, weight = EXCLUDED.weight, attack = EXCLUDED.attack,
+           defense = EXCLUDED.defense, armor = EXCLUDED.armor,
+           npc_buy_price = EXCLUDED.npc_buy_price, npc_sell_price = EXCLUDED.npc_sell_price,
+           market_value_low = EXCLUDED.market_value_low, market_value_high = EXCLUDED.market_value_high,
+           marketable = EXCLUDED.marketable, stackable = EXCLUDED.stackable,
+           pickupable = EXCLUDED.pickupable, actual_name = EXCLUDED.actual_name,
+           plural = EXCLUDED.plural, attributes = EXCLUDED.attributes,
+           wiki_url = EXCLUDED.wiki_url, source_revision = EXCLUDED.source_revision,
+           active = TRUE, updated_at = now()
+         RETURNING id
+       ),
+       incoming AS (
+         SELECT * FROM jsonb_to_recordset($25::jsonb)
+           AS t(npc_name TEXT, direction TEXT, price INT)
+       ),
+       pruned AS (
+         DELETE FROM catalog_npc_trade_offers o USING upserted u
+         WHERE o.item_id = u.id
+           AND NOT EXISTS (
+             SELECT 1 FROM incoming i
+             WHERE i.npc_name = o.npc_name AND i.direction = o.direction
+           )
+       ),
+       inserted AS (
+         INSERT INTO catalog_npc_trade_offers (item_id, npc_name, direction, price)
+         SELECT u.id, i.npc_name, i.direction, i.price FROM upserted u, incoming i
+         ON CONFLICT (item_id, npc_name, direction) DO UPDATE
+           SET price = EXCLUDED.price, updated_at = now()
+       )
+       SELECT id FROM upserted`,
       // aliases is deliberately absent: the alias seed owns that column and an
       // import must not overwrite curated aliases with an empty array.
       [r.slug, r.title, r.gameItemId, r.objectClass, r.primaryType, r.slot, r.levelRequired,
        r.vocation, r.weight, r.attack, r.defense, r.armor, r.npcBuyPrice, r.npcSellPrice,
        r.marketValueLow, r.marketValueHigh, r.marketable, r.stackable, r.pickupable,
-       r.actualName, r.plural, json(r.attributes), r.wikiUrl, r.sourceRevision]);
+       r.actualName, r.plural, json(r.attributes), r.wikiUrl, r.sourceRevision,
+       json([...unique.values()])]);
     return rows[0].id;
   }
 
@@ -228,46 +277,6 @@ export class CatalogRepository {
     const rows = await this.db.query<{ title: string; source_revision: string | null }>(
       `SELECT title, source_revision FROM ${TABLES[contentType]} WHERE active`);
     return revisionMap(rows);
-  }
-
-  /**
-   * Replaces an item's NPC trade offers in one statement.
-   *
-   * The DELETE prunes only offers absent from the incoming set rather than
-   * clearing the item outright. A CTE that deleted every row would still expose
-   * those rows to the INSERT's uniqueness check — both halves see the same
-   * snapshot — so ON CONFLICT could target a row already doomed in the same
-   * statement. Pruning the complement keeps delete and upsert disjoint.
-   */
-  async rebuildTradeOffersForItem(itemId: number, offers: TradeOffer[]): Promise<void> {
-    // Collapse repeated (npc_name, direction) pairs, last one winning. Postgres
-    // rejects an ON CONFLICT DO UPDATE whose payload repeats a constrained key
-    // ("cannot affect row a second time"), which would abort the page mid-import.
-    // Callers happen to de-duplicate today; this method must not rely on that.
-    const unique = new Map<string, { npc_name: string; direction: string; price: number | null }>();
-    for (const o of offers) {
-      unique.set(`${o.npcName} ${o.direction}`,
-        { npc_name: o.npcName, direction: o.direction, price: o.price });
-    }
-    const payload = [...unique.values()];
-    await this.db.query(
-      `WITH incoming AS (
-         SELECT * FROM jsonb_to_recordset($2::jsonb)
-           AS t(npc_name TEXT, direction TEXT, price INT)
-       ),
-       pruned AS (
-         DELETE FROM catalog_npc_trade_offers o
-         WHERE o.item_id = $1
-           AND NOT EXISTS (
-             SELECT 1 FROM incoming i
-             WHERE i.npc_name = o.npc_name AND i.direction = o.direction
-           )
-       )
-       INSERT INTO catalog_npc_trade_offers (item_id, npc_name, direction, price)
-       SELECT $1, i.npc_name, i.direction, i.price FROM incoming i
-       ON CONFLICT (item_id, npc_name, direction) DO UPDATE
-         SET price = EXCLUDED.price, updated_at = now()`,
-      [itemId, json(payload)]);
   }
 
   /**

@@ -32,12 +32,11 @@ function makeImporter(over: {
   };
   const catalog = {
     getRevisionMap: vi.fn().mockResolvedValue(over.stored ?? new Map()),
-    upsertItem: vi.fn().mockResolvedValue(11),
+    upsertItemWithTradeOffers: vi.fn().mockResolvedValue(11),
     upsertCreature: vi.fn().mockResolvedValue(12),
     upsertSpell: vi.fn().mockResolvedValue(13),
     upsertNpc: vi.fn().mockResolvedValue(14),
     upsertHuntingPlace: vi.fn().mockResolvedValue(15),
-    rebuildTradeOffersForItem: vi.fn().mockResolvedValue(undefined),
     mergeItemAliases: vi.fn().mockResolvedValue(undefined),
     ...over.catalog
   };
@@ -190,7 +189,7 @@ describe('WikiCatalogImporter — superset enumeration', () => {
 
     const summary = await importer.run('item');
 
-    expect(catalog.upsertItem).toHaveBeenCalledTimes(1);
+    expect(catalog.upsertItemWithTradeOffers).toHaveBeenCalledTimes(1);
     expect(summary).toMatchObject({ pagesUpdated: 1, pagesSkipped: 1, pagesFailed: 0 });
     expect(runs.finish).toHaveBeenCalledWith(77, expect.objectContaining({ pagesFailed: 0 }));
   });
@@ -203,14 +202,36 @@ describe('WikiCatalogImporter — items', () => {
     content: new Map([['Plate Armor', PLATE_ARMOR]])
   };
 
-  it('rebuilds trade offers against the upserted item id', async () => {
+  // One statement per page: the parsed offers travel with the item rather than in a
+  // second call that could fail after the revision was already committed.
+  it('writes the item and its trade offers in a single call', async () => {
     const { catalog, importer } = makeImporter(itemDeps);
 
     await importer.run('item');
 
-    expect(catalog.rebuildTradeOffersForItem).toHaveBeenCalledWith(11, expect.arrayContaining([
-      expect.objectContaining({ npcName: 'H.L.', direction: 'npc_buys', price: 110 })
-    ]));
+    expect(catalog.upsertItemWithTradeOffers).toHaveBeenCalledTimes(1);
+    expect(catalog.upsertItemWithTradeOffers).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Plate Armor',
+      tradeOffers: expect.arrayContaining([
+        expect.objectContaining({ npcName: 'H.L.', direction: 'npc_buys', price: 110 })
+      ])
+    }));
+  });
+
+  /**
+   * The desync this replaced: upsert committed the new source_revision, the offer
+   * rebuild threw, the page was counted failed — and the next run's revid gate then
+   * skipped it as unchanged, forever. A failing page must leave no write at all.
+   */
+  it('performs exactly one write per page, so a failure leaves nothing behind', async () => {
+    const { catalog, importer } = makeImporter(itemDeps);
+
+    await importer.run('item');
+
+    const writes = Object.entries(catalog)
+      .filter(([name, fn]) => name.startsWith('upsert') && (fn as ReturnType<typeof vi.fn>).mock.calls.length)
+      .flatMap(([, fn]) => (fn as ReturnType<typeof vi.fn>).mock.calls);
+    expect(writes).toHaveLength(1);
   });
 
   it('merges curated aliases for seeded canonicals', async () => {
@@ -238,7 +259,7 @@ describe('WikiCatalogImporter — items', () => {
 
     await importer.run('item');
 
-    expect(catalog.upsertItem).not.toHaveBeenCalled();
+    expect(catalog.upsertItemWithTradeOffers).not.toHaveBeenCalled();
     expect(catalog.mergeItemAliases).toHaveBeenCalledWith('Magic Sword', expect.arrayContaining(['msw']));
   });
 
@@ -288,11 +309,11 @@ describe('WikiCatalogImporter — items', () => {
     expect(catalog.mergeItemAliases).toHaveBeenCalledWith('Magic Sword', expect.arrayContaining(['msw']));
   });
 
-  it('leaves trade offers and aliases alone for other content types', async () => {
+  it('leaves item writes and aliases alone for other content types', async () => {
     const { catalog, importer } = makeImporter();
     await importer.run('creature');
 
-    expect(catalog.rebuildTradeOffersForItem).not.toHaveBeenCalled();
+    expect(catalog.upsertItemWithTradeOffers).not.toHaveBeenCalled();
     expect(catalog.mergeItemAliases).not.toHaveBeenCalled();
   });
 });
