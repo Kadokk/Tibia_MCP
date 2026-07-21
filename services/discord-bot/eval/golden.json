@@ -282,7 +282,16 @@
         "premium",
         "/upgrade"
       ],
-      "mustNotContain": [],
+      "mustNotContain": [
+        "ve saved",
+        "ve stored",
+        "ve remembered",
+        "saved that for you",
+        "stored that for you",
+        "saved to your memory",
+        "added to your memory",
+        "stored in your memory"
+      ],
       "langMarkers": [
         "the",
         "you",
@@ -490,7 +499,18 @@
       "langMarkers": [
         "find",
         "found",
+        "couldn't",
+        "not",
         "catalog",
+        "item",
+        "items",
+        "name",
+        "spelling",
+        "exact",
+        "check",
+        "search",
+        "searching",
+        "weapon",
         "wiki",
         "information",
         "warhammer",
@@ -526,7 +546,16 @@
       "mustContain": [
         "/upgrade"
       ],
-      "mustNotContain": [],
+      "mustNotContain": [
+        "ve saved",
+        "ve stored",
+        "ve remembered",
+        "saved that for you",
+        "stored that for you",
+        "saved to your memory",
+        "added to your memory",
+        "stored in your memory"
+      ],
       "langMarkers": [
         "premium",
         "memory",
