@@ -146,6 +146,26 @@ describe('SYSTEM_PROMPT — rule 9 browse-then-refine', () => {
     expect(rule9()).toMatch(/show .*result|before asking/i);
   });
 
+  /**
+   * Task 20 Step 2, attempt 3: en-catalog-find-items-1 relapsed into ask-first
+   * ("What level are you?", zero tools) at roughly 1 in 5. The mandate was already
+   * present but ended in a CONDITION — "never ask for criteria first when the
+   * catalog can already answer with what you have" — which the model can satisfy
+   * by judging that a lone object class is not enough to answer with, licensing
+   * the very question the rule forbids. A mandate with an escape hatch is a
+   * preference. Same defect rule 7 had before c7a46b9, same cure: make it
+   * unconditional.
+   */
+  it('states the browse mandate without a sufficiency escape hatch', () => {
+    expect(rule9()).not.toMatch(/when the catalog can already answer/i);
+    expect(rule9()).toMatch(/always call/i);
+  });
+
+  it('declares a partial filter set sufficient so missing facts cannot justify asking', () => {
+    expect(rule9()).toMatch(/partial filter set|class alone/i);
+    expect(rule9()).toMatch(/never a reason to ask/i);
+  });
+
   it('says to reuse the filters it already has rather than asking for them', () => {
     expect(rule9()).toMatch(/player notes|already/i);
   });

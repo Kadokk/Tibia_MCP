@@ -212,6 +212,18 @@ describe('catalog tools', () => {
     }
   });
 
+  /**
+   * The tool description binds at selection time (the cf23434 / c7a46b9 lesson), so
+   * the anti-ask-first mandate has to survive here too. It already forbade asking
+   * for level or vocation; what it did not close was the "I have too few filters to
+   * call at all" rationalisation behind the attempt-3 relapse.
+   */
+  it('tells find_items that a single inferred filter is enough to call', () => {
+    const def = localToolDefs.find((t) => t.name === 'find_items');
+    expect(def?.description).toMatch(/one filter is enough|class alone/i);
+    expect(def?.description).toMatch(/never a reason to ask|always call/i);
+  });
+
   it('declares find_items with every filter optional and no user id', () => {
     const def = localToolDefs.find((t) => t.name === 'find_items');
     expect(def).toBeDefined();
