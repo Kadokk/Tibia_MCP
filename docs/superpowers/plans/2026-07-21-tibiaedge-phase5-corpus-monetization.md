@@ -271,7 +271,7 @@ System prompt gains rule 9, named **CATALOG** (rule 1 is already named GROUNDING
 
 Against the local smoke DB: `--limit 20` dry-run per type first, then the full run. Assert exit-criterion counts; spot-check Magic Sword (aliases include "msw"), Demon (fire resistance 0%, spawn locations non-empty), Rashid (city present, no `{{` leakage), Ab'Dendriel Elf Cave (lvlknights 20). Record wall-clock and request count in the checklist section. Re-run immediately → near-total revid skip (incremental gate proof).
 
-- [ ] **Step 1:** Dry runs. **Step 2:** Full run + assertions. **Step 3:** Incremental re-run proof. **Step 4:** Checklist section appended.
+- [x] **Step 1:** Dry runs. **Step 2:** Full run + assertions. **Step 3:** Incremental re-run proof. **Step 4:** Checklist section appended.
 
 **Exit:** exit-criterion 1 numbers recorded. **Commit:** `docs(checklist): Phase 5 verification — live catalog import results (Task 15)`
 
