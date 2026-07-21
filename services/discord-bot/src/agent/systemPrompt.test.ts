@@ -50,6 +50,26 @@ describe('SYSTEM_PROMPT — CATALOG rule', () => {
     expect(rule7()).toMatch(/server-side|decided by the server/i);
   });
 
+  /**
+   * Escape-hatch audit after 5a0b109 proved the failure class in this codebase is
+   * "mandates that end in a condition". c7a46b9 added the mandate but left two
+   * conditions behind it: recall_memory was triggered by whether stored data
+   * "could change the answer", and the mandate itself was scoped "when the trigger
+   * applies" — so the whole thing reduced to a model judgment. That interlocks with
+   * the one signal we cannot remove: a free player's PLAYER NOTES has no facts
+   * section, so the model infers nothing is stored, concludes recalling cannot
+   * change the answer, and skips the call it was just told to always make.
+   */
+  it('triggers the memory tools on what the user asked, not on a sufficiency judgment', () => {
+    expect(rule7()).not.toMatch(/could change the answer/i);
+    expect(rule7()).not.toMatch(/when the trigger applies/i);
+  });
+
+  it('forbids weighing the call and denies the empty-PLAYER-NOTES inference', () => {
+    expect(rule7()).toMatch(/never weigh|never judge/i);
+    expect(rule7()).toMatch(/not evidence|says nothing about what is stored/i);
+  });
+
   it('leaks no TibiaEdge tier vocabulary into rule 7', () => {
     for (const leak of [/premium feature/i, /\/upgrade/i, /free tier/i]) {
       expect(rule7()).not.toMatch(leak);

@@ -437,6 +437,20 @@ describe('catalog tools — tier independence', () => {
     }
   });
 
+  /**
+   * Same audit on the surface that binds at selection time. recall_memory's trigger
+   * was doubly conditional — "could improve this answer" AND "the PLAYER NOTES block
+   * does not already contain it" — both of which a model resolves by inspecting a
+   * block that, for a free player, is structurally empty of facts.
+   */
+  it('triggers the memory tools without a sufficiency test', () => {
+    for (const def of memoryDefs()) {
+      expect(def.description).not.toMatch(/could improve this answer/i);
+      expect(def.description).not.toMatch(/does not already contain it/i);
+      expect(def.description).toMatch(/never judge|never decide/i);
+    }
+  });
+
   it('keeps the memory tool descriptions free of tier vocabulary', () => {
     for (const def of memoryDefs()) {
       for (const leak of [/premium/i, /\/upgrade/i, /free tier/i]) {
