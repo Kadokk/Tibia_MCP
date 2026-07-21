@@ -415,3 +415,28 @@ describe('CatalogRepository — mergeItemAliases', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 });
+
+describe('CatalogRepository — clearSourceRevisions', () => {
+  // Backfill escape hatch: the importer's revid gate skips pages whose stored
+  // revision still matches, so a parser fix alone never reaches existing rows.
+  it('nulls the stored revisions for one content type', async () => {
+    const db = fakeDb([]);
+    await repo(db).clearSourceRevisions('creature');
+
+    const sql = db.query.mock.calls[0][0] as string;
+    expect(sql).toContain('UPDATE catalog_creatures');
+    expect(sql).toContain('source_revision = NULL');
+  });
+
+  it('targets the right table for every content type', async () => {
+    const expected: Array<[Parameters<CatalogRepository['clearSourceRevisions']>[0], string]> = [
+      ['item', 'catalog_items'], ['creature', 'catalog_creatures'], ['spell', 'catalog_spells'],
+      ['npc', 'catalog_npcs'], ['hunt', 'catalog_hunting_places']
+    ];
+    for (const [type, table] of expected) {
+      const db = fakeDb([]);
+      await repo(db).clearSourceRevisions(type);
+      expect(db.query.mock.calls[0][0]).toContain(`UPDATE ${table}`);
+    }
+  });
+});

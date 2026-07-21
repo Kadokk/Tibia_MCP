@@ -38,7 +38,8 @@ const FIRE = wikitextOf('catalog_object_nonitem.api.json');
 const DOLL = wikitextOf('catalog_object_edges.api.json', 'Doll');
 const SILVER_KEY = wikitextOf('catalog_object_edges.api.json', 'Silver Key');
 const RUNE = wikitextOf('catalog_batch.api.json', 'Great Fireball Rune');
-const DEMON = wikitextOf('catalog_creature_demon.api.json');
+const DEMON = wikitextOf('catalog_creature_demon.api.json', 'Demon');
+const BLACK_KNIGHT = wikitextOf('catalog_creature_demon.api.json', 'Black Knight');
 const ULTIMATE_HEALING = wikitextOf('catalog_spell.api.json', 'Ultimate Healing');
 const LEVITATE = wikitextOf('catalog_spell.api.json', 'Levitate');
 const ANNIHILATION = wikitextOf('catalog_spell.api.json', 'Annihilation');
@@ -675,5 +676,52 @@ describe('mapHuntingPlace', () => {
 
   it('returns null for a page with no hunt infobox', () => {
     expect(mapHuntingPlace('Demon', DEMON, 1)).toBeNull();
+  });
+});
+
+describe('wiki links never reach stored values', () => {
+  /**
+   * Task 12 follow-up. The no-markup guarantee was only ever checked for '{{'.
+   * Ability and loot names sit inside nested templates and were merely trimmed, so
+   * "{{Ability|Throws [[Spears]]|0-200}}" stored the brackets — user-visible in
+   * get_creature_info, and present in ~34% of sampled creature pages.
+   */
+  it('degrades a linked ability name to its display text', () => {
+    const abilities = parseAbilityList(parseInfoboxParams('Infobox Creature', BLACK_KNIGHT).get('abilities'));
+
+    expect(abilities).toContainEqual({ name: 'Throws Spears', range: '0-200', element: 'physical' });
+    expect(JSON.stringify(abilities)).not.toContain('[[');
+  });
+
+  it('keeps piped links as their display text, not their target', () => {
+    // [[Cursed|Curses]] must read "Curses", the words the page actually shows.
+    expect(stripToPlainText('Causes [[Cursed|Curses]]')).toBe('Causes Curses');
+  });
+
+  it('leaves an unlinked ability untouched', () => {
+    const abilities = parseAbilityList(parseInfoboxParams('Infobox Creature', DEMON).get('abilities'));
+
+    expect(abilities).toContainEqual({ name: 'Great Fireball', range: '150-250', element: 'fire' });
+  });
+
+  it('carries no wiki markup of any kind through any mapper', () => {
+    const records = [
+      mapItem('Plate Armor', PLATE_ARMOR, 1),
+      mapItem('Doll', DOLL, 1),
+      mapCreature('Demon', DEMON, 1),
+      mapCreature('Black Knight', BLACK_KNIGHT, 1),
+      mapSpell('Ultimate Healing', ULTIMATE_HEALING, 1),
+      mapNpc('Rashid', RASHID, 1),
+      mapNpc('Captain Waverider', WAVERIDER, 1),
+      mapHuntingPlace("Ab'Dendriel Elf Cave", ELF_CAVE, 1)
+    ];
+
+    for (const record of records) {
+      expect(record).not.toBeNull();
+      const serialized = JSON.stringify(record);
+      expect(serialized, 'no templates').not.toContain('{{');
+      expect(serialized, 'no link markup').not.toContain('[[');
+      expect(serialized, 'no closing link markup').not.toContain(']]');
+    }
   });
 });

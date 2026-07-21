@@ -257,6 +257,19 @@ export class CatalogRepository {
   }
 
   /**
+   * Nulls the stored revisions for a content type, forcing the next import to
+   * re-fetch and re-parse every page.
+   *
+   * The importer's revid gate compares stored against live revisions, so a parser
+   * fix on its own never reaches rows already imported — their pages have not been
+   * edited, so they are skipped forever. This is the backfill escape hatch.
+   */
+  async clearSourceRevisions(contentType: CatalogContentType): Promise<void> {
+    await this.db.query(
+      `UPDATE ${TABLES[contentType]} SET source_revision = NULL, updated_at = now()`);
+  }
+
+  /**
    * Folds curated aliases into an item's stored array.
    *
    * A union in SQL rather than a read-modify-write: the seed must add to whatever

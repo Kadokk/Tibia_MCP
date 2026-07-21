@@ -4,6 +4,11 @@
  *   npm run import:catalog                          # every content type
  *   npm run import:catalog -- --type spell          # one type
  *   npm run import:catalog -- --type spell --limit 3
+ *   npm run import:catalog -- --type creature --force   # re-parse every page
+ *
+ * --force clears the stored revisions first, so pages that have not been edited
+ * are re-fetched and re-parsed. Needed after a parser fix: the revid gate would
+ * otherwise skip them forever.
  *
  * Makes zero model calls, so it needs no working OpenRouter key — but parseEnv
  * validates the whole app environment, so the Discord and MCP variables must be
@@ -26,7 +31,7 @@ import { WikiApiClient, WIKI_USER_AGENT } from './wikiApiClient';
 import { WikiCatalogImporter, type CatalogImportType } from './wikiCatalogImporter';
 import { CATALOG_IMPORT_ORDER } from '../scheduler/catalogImportScheduler';
 
-export type CatalogImportArgs = { types: CatalogImportType[]; limit?: number };
+export type CatalogImportArgs = { types: CatalogImportType[]; limit?: number; force: boolean };
 
 const isContentType = (value: string): value is CatalogImportType =>
   (CATALOG_IMPORT_ORDER as readonly string[]).includes(value);
@@ -37,7 +42,7 @@ const isContentType = (value: string): value is CatalogImportType =>
  * and report success; an unchecked --type would silently sweep the whole corpus.
  */
 export function parseCatalogImportArgs(argv: string[]): CatalogImportArgs {
-  const args: CatalogImportArgs = { types: [...CATALOG_IMPORT_ORDER] };
+  const args: CatalogImportArgs = { types: [...CATALOG_IMPORT_ORDER], force: argv.includes('--force') };
 
   const typeFlag = argv.indexOf('--type');
   if (typeFlag !== -1) {
@@ -83,6 +88,15 @@ async function main(): Promise<void> {
     catalog,
     runs: new WikiImportRunRepository(db)
   });
+
+  if (args.force) {
+    // Re-parse everything: the revid gate would otherwise skip rows whose pages
+    // have not changed, leaving data produced by an older parser in place.
+    for (const contentType of args.types) {
+      await catalog.clearSourceRevisions(contentType);
+      console.log(`${contentType}: cleared stored revisions, every page will re-parse`);
+    }
+  }
 
   for (const contentType of args.types) {
     const summary = await importer.run(contentType, args.limit === undefined ? undefined : { limit: args.limit });

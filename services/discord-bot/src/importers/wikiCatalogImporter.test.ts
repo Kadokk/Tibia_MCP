@@ -13,7 +13,8 @@ function wikitextOf(file: string, title?: string): string {
   return page!.revisions[0].slots.main.content;
 }
 
-const DEMON = wikitextOf('catalog_creature_demon.api.json');
+// The creature fixture holds two pages; name the one this suite asserts on.
+const DEMON = wikitextOf('catalog_creature_demon.api.json', 'Demon');
 const PLATE_ARMOR = wikitextOf('catalog_item.api.json');
 const FIRE = wikitextOf('catalog_object_nonitem.api.json');
 

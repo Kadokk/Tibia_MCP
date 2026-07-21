@@ -273,8 +273,16 @@ function findTemplateCalls(raw: string): TemplateCall[] {
   return calls;
 }
 
+/**
+ * A typed field's value, degraded to plain text.
+ *
+ * Every typed column funnels through here, so wiki markup cannot reach the
+ * database through any mapper. Trimming alone was not enough: ability and loot
+ * names live inside nested templates, so "{{Ability|Throws [[Spears]]|0-200}}"
+ * stored the brackets verbatim.
+ */
 const clean = (raw: string | undefined): string | null =>
-  raw === undefined || isUnknown(raw) ? null : raw.trim();
+  raw === undefined || isUnknown(raw) ? null : stripToPlainText(raw);
 
 /**
  * Reduces a wiki param to storable plain text.
@@ -509,10 +517,7 @@ export function mapItem(title: string, wikitext: string, revid: number | null): 
   if (!isCatalogItem(params)) return null;
 
   const get = (k: string): string | undefined => params.get(k);
-  const text = (k: string): string | null => {
-    const raw = get(k);
-    return raw === undefined || isUnknown(raw) ? null : raw.trim();
-  };
+  const text = (k: string): string | null => clean(get(k));
 
   const value = parseValueRange(get('value'));
   const attributes = residualAttributes(params, TYPED_PARAMS, ATTRIBUTE_EXCLUDE);
@@ -597,7 +602,11 @@ function residualAttributes(
     if (typed.has(k) || exclude.has(k) || skip?.(k)) continue;
     if (!v || isUnknown(v) || v.length > 200) continue;
     if (v.includes('{{') || v.includes('}}')) continue;
-    attributes[k] = v;
+    // Template-bearing values are dropped above; whatever is left only needs its
+    // links and inline markup degraded.
+    const text = stripToPlainText(v);
+    if (!text) continue;
+    attributes[k] = text;
   }
   return attributes;
 }
