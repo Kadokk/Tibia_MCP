@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
 import type OpenAI from 'openai';
 import { createAiClient } from '../src/ai/client';
 import { runAsk, toAiTools } from '../src/agent/agentLoop';
-import { createToolRouter, localToolDefs } from '../src/agent/localTools';
+import { buildLoopToolDefs, createToolRouter } from '../src/agent/localTools';
 import { PlayerContextService } from '../src/services/playerContextService';
 import { connectMcp, type McpToolResult } from '../src/mcp/mcpClient';
 
@@ -160,6 +160,92 @@ function makeLocalQuests(fixture: UserFixture | undefined, calls: string[]) {
   };
 }
 
+// Canned catalog corpus for the eval: one small row per content type, shaped like
+// the repository's return values so the tools render exactly as they do in
+// production, attribution included. Grounding assertions key off these numbers.
+const EVAL_ATTRIBUTION = 'Content from TibiaWiki (tibia.fandom.com), CC BY-SA 3.0.';
+const EVAL_ITEM = {
+  id: 1, slug: 'magic-plate-armor', title: 'Magic Plate Armor', game_item_id: 3366,
+  object_class: 'Body Equipment', primary_type: 'Armors', slot: 'Body', level_required: null,
+  vocation: null, weight: '120.00', attack: null, defense: null, armor: 17,
+  npc_buy_price: null, npc_sell_price: 15000, market_value_low: 15000, market_value_high: 15000,
+  marketable: true, stackable: false, pickupable: true, actual_name: 'magic plate armor',
+  plural: null, aliases: ['magic plate armor', 'mpa'], attributes: {},
+  wiki_url: 'https://tibia.fandom.com/wiki/Magic_Plate_Armor', attribution: EVAL_ATTRIBUTION,
+  source_revision: '1000001'
+};
+const EVAL_CREATURE = {
+  id: 2, slug: 'dragon', title: 'Dragon', hp: 1000, exp: 700, armor: 25, mitigation: '1.55',
+  bestiary_class: 'Dragon', bestiary_level: 'Medium', occurrence: 'Common', is_boss: false,
+  creature_class: 'Dragons', primary_type: 'Dragons', spawn_type: 'Regular', summon_cost: null,
+  convince_cost: null, abilities: [{ name: 'Fire Wave', range: '100-170', element: 'fire' }],
+  resistances: { fire: 0, ice: 110, energy: 105 }, max_damage: { fire: 170 },
+  loot: [{ item: 'Dragon Ham', amount: '1-3', rarity: 'common' }, { item: 'Dragon Shield', amount: null, rarity: 'semi-rare' }],
+  locations: ['Thais', 'Kazordoon'], attributes: {},
+  wiki_url: 'https://tibia.fandom.com/wiki/Dragon', attribution: EVAL_ATTRIBUTION, source_revision: '1000002'
+};
+const EVAL_SPELL = {
+  id: 3, slug: 'ultimate-healing', title: 'Ultimate Healing', words: 'exura vita',
+  spell_class: 'Instant', subclass: 'Healing', vocations: ['Druid', 'Sorcerer'],
+  level_required: 30, mana: 160, premium: false, cooldown: '1',
+  effect: 'Restores a large amount of health.', attributes: {},
+  wiki_url: 'https://tibia.fandom.com/wiki/Ultimate_Healing', attribution: EVAL_ATTRIBUTION,
+  source_revision: '1000003'
+};
+const EVAL_NPC = {
+  id: 4, slug: 'rashid', title: 'Rashid', job: 'Merchant', city: 'Svargrond',
+  location: 'Travels around between Carlin and various Premium cities.', buysell: true,
+  attributes: {}, wiki_url: 'https://tibia.fandom.com/wiki/Rashid', attribution: EVAL_ATTRIBUTION,
+  source_revision: '1000004'
+};
+const EVAL_HUNT = {
+  id: 5, slug: 'ab-dendriel-elf-cave', title: "Ab'Dendriel Elf Cave", city: "Ab'Dendriel",
+  location: 'North-west of Ab\'Dendriel.', vocations: 'All vocations.',
+  level_knights: 20, level_paladins: 20, level_mages: 25, loot_rating: 'Bad', loot_stars: 2,
+  exp_rating: 'Bad', exp_stars: 2, best_loot: ['Wand of Cosmic Energy'],
+  creatures: ['Snake', 'Elf', 'Elf Scout'], attributes: {},
+  wiki_url: "https://tibia.fandom.com/wiki/Ab'Dendriel_Elf_Cave", attribution: EVAL_ATTRIBUTION,
+  source_revision: '1000005'
+};
+
+/**
+ * Per-case recording fakes for the six catalog tools, mirroring makeLocalQuests.
+ * A name that does not match the canned row returns null / [], which is what makes
+ * the CATALOG rule's honest-miss behaviour observable in an eval case.
+ */
+function makeLocalCatalog(calls: string[]) {
+  const matches = (needle: string, ...aliases: string[]) =>
+    aliases.some((a) => needle.toLowerCase().includes(a));
+  return {
+    catalog: {
+      findItemLoose: async (name: string) => {
+        calls.push('get_item_info');
+        return matches(name, 'magic plate', 'mpa') ? EVAL_ITEM : null;
+      },
+      findItems: async (f: { search?: string }) => {
+        calls.push('find_items');
+        return matches(f.search ?? '', 'armor', 'armour', 'plate') ? [EVAL_ITEM] : [];
+      },
+      findCreatureLoose: async (name: string) => {
+        calls.push('get_creature_info');
+        return matches(name, 'dragon') ? EVAL_CREATURE : null;
+      },
+      findSpellLoose: async (name: string) => {
+        calls.push('get_spell_info');
+        return matches(name, 'ultimate healing', 'exura vita') ? EVAL_SPELL : null;
+      },
+      findNpcLoose: async (name: string) => {
+        calls.push('get_npc_info');
+        return matches(name, 'rashid') ? EVAL_NPC : null;
+      },
+      findHuntingPlaces: async (f: { level: number }) => {
+        calls.push('find_hunting_places');
+        return f.level >= 20 ? [EVAL_HUNT] : [];
+      }
+    }
+  };
+}
+
 // --- main ----------------------------------------------------------------
 
 type CaseResult = {
@@ -189,7 +275,9 @@ async function main(): Promise<void> {
   let tools: OpenAI.Chat.Completions.ChatCompletionTool[];
   try {
     const realBridge = await connectMcp(mcpCommand, repoRoot);
-    tools = toAiTools([...(await realBridge.listTools()), ...localToolDefs]);
+    // Same filter as main.ts: the eval must advertise exactly what production does,
+    // or a case can pass here by calling a tool the bot never offers.
+    tools = toAiTools(buildLoopToolDefs(await realBridge.listTools()));
     // Schemas fetched — release the tibia-mcp child so it doesn't linger for the whole
     // run and keep the process alive after the report prints.
     await realBridge.close();
@@ -222,6 +310,7 @@ async function main(): Promise<void> {
     if (userContext) fixtureBridge.seed(userContext);
     const local = makeLocalMemory(fixture);
     const localQuests = makeLocalQuests(fixture, local.calls);
+    const localCatalog = makeLocalCatalog(local.calls);
     const caseStartedAt = Date.now();
     console.error(`[eval] → ${c.id} …`);
     try {
@@ -234,7 +323,8 @@ async function main(): Promise<void> {
           mcp: createToolRouter({
             mcp: fixtureBridge.bridge,
             ...local.deps,
-            ...localQuests
+            ...localQuests,
+            ...localCatalog
           } as never).bind('eval-user', fixture?.tier ?? 'free'),
           tools,
           model,

@@ -112,6 +112,24 @@ export const localToolDefs: McpToolDef[] = [
 
 const LOCAL_TOOL_NAMES = new Set(localToolDefs.map((t) => t.name));
 
+/**
+ * C++ MCP tools the SQL catalog tools supersede: same underlying wiki data, but
+ * the catalog rows carry typed fields, aliases and attribution. Advertising both
+ * invites the model to pick the thinner one and answer without a source.
+ *
+ * search_wiki and search_quest deliberately stay — search_wiki is the fallback the
+ * CATALOG rule names for subjects the catalog has no row for.
+ *
+ * This hides them from the model only. The router still forwards any name it does
+ * not own straight to MCP, so /price keeps calling search_item directly.
+ */
+export const SUPERSEDED_MCP_TOOLS = new Set(['search_item', 'search_creature', 'search_spell']);
+
+/** The one tool list the loop advertises: surviving MCP tools, then local tools. */
+export function buildLoopToolDefs(mcpDefs: McpToolDef[]): McpToolDef[] {
+  return [...mcpDefs.filter((t) => !SUPERSEDED_MCP_TOOLS.has(t.name)), ...localToolDefs];
+}
+
 export type LocalToolDeps = {
   mcp: Pick<McpBridge, 'callTool'>;
   memory: Pick<MemoryRepository, 'insertFact' | 'countActiveFacts' | 'searchFacts'>;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createToolRouter, localToolDefs, PREMIUM_MEMORY_MESSAGE } from './localTools';
+import { buildLoopToolDefs, createToolRouter, localToolDefs, PREMIUM_MEMORY_MESSAGE } from './localTools';
 
 const QUEST = {
   id: 7, slug: 'against-the-spider-cult-quest', title: 'Against the Spider Cult Quest',
@@ -388,5 +388,66 @@ describe('catalog tools — tier independence', () => {
   it('advertises a byte-identical tool list regardless of tier', () => {
     expect(JSON.stringify(localToolDefs)).toBe(JSON.stringify(localToolDefs));
     expect(localToolDefs.filter((t) => t.name.startsWith('get_') || t.name.startsWith('find_'))).toHaveLength(7);
+  });
+});
+
+describe('buildLoopToolDefs', () => {
+  const MCP_DEFS = [
+    { name: 'search_item', description: 'C++ item search', inputSchema: { type: 'object', properties: {} } },
+    { name: 'search_creature', description: 'C++ creature search', inputSchema: { type: 'object', properties: {} } },
+    { name: 'search_spell', description: 'C++ spell search', inputSchema: { type: 'object', properties: {} } },
+    { name: 'search_wiki', description: 'C++ wiki search', inputSchema: { type: 'object', properties: {} } },
+    { name: 'search_quest', description: 'C++ quest search', inputSchema: { type: 'object', properties: {} } },
+    { name: 'valuate_auction', description: 'auction valuation', inputSchema: { type: 'object', properties: {} } }
+  ];
+
+  /**
+   * The SQL catalog tools supersede three C++ search tools: same data, richer
+   * fields, one source of truth. Advertising both invites the model to pick the
+   * thinner one and answer without attribution.
+   */
+  it('drops the three superseded C++ search tools', () => {
+    const names = buildLoopToolDefs(MCP_DEFS).map((t) => t.name);
+
+    expect(names).not.toContain('search_item');
+    expect(names).not.toContain('search_creature');
+    expect(names).not.toContain('search_spell');
+  });
+
+  it('keeps search_wiki, which the CATALOG rule names as the fallback', () => {
+    expect(buildLoopToolDefs(MCP_DEFS).map((t) => t.name)).toContain('search_wiki');
+  });
+
+  it('keeps search_quest and every other MCP tool', () => {
+    const names = buildLoopToolDefs(MCP_DEFS).map((t) => t.name);
+
+    expect(names).toContain('search_quest');
+    expect(names).toContain('valuate_auction');
+  });
+
+  it('appends every local tool after the surviving MCP tools', () => {
+    const names = buildLoopToolDefs(MCP_DEFS).map((t) => t.name);
+
+    expect(names.slice(0, 3)).toEqual(['search_wiki', 'search_quest', 'valuate_auction']);
+    expect(names.slice(3)).toEqual(localToolDefs.map((t) => t.name));
+  });
+
+  it('is MCP minus the three superseded tools, plus every local tool', () => {
+    expect(buildLoopToolDefs(MCP_DEFS)).toHaveLength(MCP_DEFS.length - 3 + localToolDefs.length);
+  });
+
+  it('leaves an MCP list that never had them untouched', () => {
+    const clean = [{ name: 'search_wiki', description: 'x', inputSchema: { type: 'object', properties: {} } }];
+    expect(buildLoopToolDefs(clean)).toHaveLength(1 + localToolDefs.length);
+  });
+
+  // /price calls search_item straight through the bridge, bypassing the advertised
+  // list. Filtering must hide the tool from the model without unrouting it.
+  it('does not stop the router dispatching a filtered tool by name', async () => {
+    const { deps, router } = makeRouter();
+    const r = await router.bind('u1', 'free').callTool('search_item', { query: 'gold token' });
+
+    expect(deps.mcp.callTool).toHaveBeenCalledWith('search_item', { query: 'gold token' });
+    expect(r.text).toBe('mcp result');
   });
 });

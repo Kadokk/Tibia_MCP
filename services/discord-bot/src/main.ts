@@ -8,7 +8,7 @@ import { createDbClient } from './db/client';
 import { loadMigrations, runMigrations } from './db/migrationRunner';
 import { runAsk, toAiTools } from './agent/agentLoop';
 import { createAiClient } from './ai/client';
-import { createToolRouter, localToolDefs } from './agent/localTools';
+import { buildLoopToolDefs, createToolRouter } from './agent/localTools';
 import { connectMcp } from './mcp/mcpClient';
 import { startRefreshScheduler } from './scheduler/refreshScheduler';
 import { startProfileSyncScheduler } from './scheduler/profileSyncScheduler';
@@ -134,7 +134,7 @@ const router = createToolRouter({ mcp, memory, captures, quests, questEligibilit
 
 // ONE merged tool list: MCP defs then local defs, fetched once at startup so every
 // request advertises the same tools across users, tiers, and questions.
-const tools = toAiTools([...(await mcp.listTools()), ...localToolDefs]);
+const tools = toAiTools(buildLoopToolDefs(await mcp.listTools()));
 
 const distill = new DistillService({
   ai: aiClient, captures, memory, entities, links: linkedChars, tiers, usage,
