@@ -82,8 +82,17 @@ describe('SYSTEM_PROMPT — rule 9 scope boundaries', () => {
    * Class C: "What is a dragon in Tibia?" is a conceptual question. Forcing a
    * lookup turned a short Polish answer into relayed English source data.
    */
-  it('exempts broad conceptual questions from the lookup requirement', () => {
-    expect(rule9()).toMatch(/what something (broadly )?is|general|conceptual|broadly/i);
+  /**
+   * The carve-out was too wide: "what is a dragon" is a broad question about a real
+   * catalog creature, and exempting it let the model answer from memory and state
+   * wrong stats as fact. It now covers only subjects the catalog does not hold.
+   */
+  it('exempts only broad questions that are not about a catalog subject', () => {
+    expect(rule9()).toMatch(/concept|mechanic|not about a catalog/i);
+  });
+
+  it('still requires a lookup for a broad question about a real catalog subject', () => {
+    expect(rule9()).toMatch(/still needs the lookup|still call|from memory/i);
   });
 
   it('keeps the answer in the user language rather than relaying english tool output', () => {

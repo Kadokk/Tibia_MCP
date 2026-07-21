@@ -689,3 +689,24 @@ describe('find_items — filter-only browsing', () => {
     expect(JSON.stringify(def!.inputSchema)).toMatch(/name fragment|not a category|category/i);
   });
 });
+
+describe('find_items — browse-first mandate', () => {
+  /**
+   * The system prompt already carries this rule, and a captured request proved it
+   * reaches the model — but it is one line inside an 11k-character prompt and the
+   * model kept asking clarifying questions instead of calling the tool. Tool
+   * descriptions are read at tool-selection time, so the mandate lives here too.
+   */
+  it('tells the model to call it before asking the player anything', () => {
+    const def = localToolDefs.find((t) => t.name === 'find_items');
+
+    expect(def!.description).toMatch(/without asking|before asking|do not ask/i);
+    expect(def!.description).toMatch(/clarif|narrow|refine/i);
+  });
+
+  it('spells out how to turn a category phrase into a filter', () => {
+    const def = localToolDefs.find((t) => t.name === 'find_items');
+
+    expect(def!.description).toMatch(/body armour|body equipment/i);
+  });
+});

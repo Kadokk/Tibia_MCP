@@ -158,10 +158,16 @@
         "gwarantowany"
       ],
       "langMarkers": [
+        "smok",
+        "smoka",
+        "smoki",
+        "smokiem",
         "jest",
         "to",
-        "na"
-      ]
+        "na",
+        "w"
+      ],
+      "mustCallTool": "get_creature_info"
     },
     {
       "id": "pl-refusal-1",
@@ -285,9 +291,14 @@
       ],
       "langMarkers": [
         "you",
+        "your",
         "to",
+        "that",
+        "will",
         "remember",
+        "remembered",
         "noted",
+        "memory",
         "weekend",
         "mornings"
       ]
